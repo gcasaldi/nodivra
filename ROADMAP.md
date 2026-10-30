@@ -8,6 +8,8 @@ The question I want it to answer is simple: **what can I actually find out about
 
 - [x] Search public activity on Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana.
 - [x] Start from an EVM transaction hash on a selected network and follow its sender or recipient.
+- [x] Search public ENS names using a possible name or surname, with clear evidence and uncertainty labels.
+- [x] Cache public search results and stagger cross-chain requests to reduce upstream rate-limit bursts.
 - [x] Show native balances and indexed tokens where the public APIs allow it.
 - [x] Follow native and token transfers up to two hops on EVM networks.
 - [x] Visualize connected addresses and open the original transaction evidence.
@@ -20,7 +22,8 @@ The question I want it to answer is simple: **what can I actually find out about
 
 - [ ] Test the complete live website and API with several real wallets across networks.
 - [x] Add independent RPC balance/type fallback on five EVM networks when indexers refuse requests.
-- [ ] Improve rate-limit handling and transaction pagination; RPC balance alone does not supply a history.
+- [ ] Complete rate-limit handling and transaction pagination; an RPC balance alone does not supply a history.
+- [ ] Add verified public-profile cross-checks for name-to-wallet attribution, without treating matching ENS names as proof of identity.
 - [ ] Improve token classification and filter obvious spam tokens without hiding evidence.
 - [ ] Make the tracing graph easier to navigate on mobile.
 - [ ] Add more automated tests for cross-chain data and unusual transactions.

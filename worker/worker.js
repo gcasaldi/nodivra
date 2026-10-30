@@ -16,7 +16,7 @@ async function getJson(url,ms=8500) {
   const c=new AbortController(), timer=setTimeout(()=>c.abort(),ms);
   try {
     const res=await fetch(url,{signal:c.signal,headers:{"Accept":"application/json"},cf:{cacheEverything:true,cacheTtl:45}});
-    if(!res.ok)failure("HTTP "+res.status,502);
+    if(!res.ok)failure(res.status===429?"Public indexer rate limit (HTTP 429); transaction data temporarily unavailable.":"HTTP "+res.status,res.status===429?503:502);
     return await res.json();
   } finally {clearTimeout(timer);}
 }
@@ -357,7 +357,11 @@ async function scanEvmNetwork(network,address) {
  return answer;
 }
 async function scanEvm(address) {
- const results=await Promise.allSettled(NETWORKS.map(n=>scanEvmNetwork(n,address)));
+ const results=[];
+ for(let i=0;i<NETWORKS.length;i+=2){
+  const batch=await Promise.allSettled(NETWORKS.slice(i,i+2).map(n=>scanEvmNetwork(n,address)));
+  results.push(...batch);
+ }
  const networks=results.map((r,i)=>r.status==="fulfilled"?r.value:({id:NETWORKS[i].id,name:NETWORKS[i].name,
   symbol:NETWORKS[i].symbol,explorer_url:NETWORKS[i].explorer+"/address/"+address,status:"unavailable",
   assets:[],native_balance:null,transaction_count:null,recent_transactions:[],public_labels:[],warnings:[String(r.reason?.message||"Service unavailable")]}));
@@ -711,21 +715,87 @@ async function inspectTransaction(hash,networkId) {
       "This record is only a public explorer observation. Cross-check the hash independently."]};
 }
 
+
+function safeNameQuery(query) {
+ const name=String(query||"").replace(/\s+/g," ").trim();
+ if(name.length<3||name.length>72||!/^[\p{L}\p{N}][\p{L}\p{N} .'-]*$/u.test(name))failure("Enter a name, surname or public ENS alias (3–72 characters).",400);
+ return name;
+}
+async function discoverPublicEnsNames(raw) {
+ const query=safeNameQuery(raw);
+ const parts=query.toLowerCase().split(/\s+/).filter(s=>s.length>=3);
+ const terms=[...new Set(parts.length>1?[parts[0],parts[parts.length-1]]:[query.toLowerCase()])].slice(0,2);
+ const records=[],seen=new Set(),errors=[];
+ for(const term of terms) {
+  try {
+   const searchUrl="https://api.enswhois.com/api/search-domains?"+new URLSearchParams({
+    q:term,availability_status:"registered",page:"1"
+   }).toString();
+   const data=await getJson(searchUrl,7000);
+   const results=Array.isArray(data?.results)?data.results:Array.isArray(data?.domains)?data.domains:[];
+   for(const entry of results.slice(0,15)){
+     const ens=String(entry?.name||entry?.full_name||"").toLowerCase();
+     if(!/^[a-z0-9][a-z0-9.-]{1,251}\.eth$/.test(ens)||seen.has(ens)||!ens.includes(term))continue;
+     seen.add(ens);
+     const owned=entry.ownership?.owner||entry.effective_owner_address||null;
+     const holder=ADDRESS.test(owned||"")?owned:null;
+     records.push({ens_name:ens,ens_registrant:holder,registration_status:entry.availability_status||"unconfirmed",
+       evidence_url:"https://app.ens.domains/"+encodeURIComponent(ens),
+       source:"ENSWhois public ENS domain index",confidence:"ens_domain_match_only",
+       note:"This is a matching ENS domain, not proof that the named person uses or controls its wallet."});
+   }
+  } catch(e){errors.push(term+": "+String(e.message||"provider unavailable").slice(0,120));}
+ }
+ if(errors.length===terms.length)failure("ENS name search provider unavailable or rate limited. Try again later.",503);
+ records.sort((a,b)=>{
+   const norm=s=>s.replace(/[^a-z0-9]/g,"");
+   const aa=norm(a.ens_name.split(".")[0]),bb=norm(b.ens_name.split(".")[0]);
+   const tgt=norm(query),aExact=aa===tgt?1:0,bExact=bb===tgt?1:0;
+   return bExact-aExact||aa.length-bb.length;
+ });
+ return {query,results:records.slice(0,10),checked_terms:terms,source:"ENSWhois public domain index",
+  warnings:errors,found:records.length>0,
+  scope:"Public ENS name matches only. Does not search private KYC records, identify a legal person or prove ownership.",
+  next_step:"Open the ENS name, inspect current public resolver records and verify any identity claim against independently authenticated public sources.",
+  independent_research:[
+    {title:"Search public wallet disclosures",url:"https://www.google.com/search?q="+encodeURIComponent('"'+query+'" ethereum wallet ENS')},
+    {title:"Search public GitHub references",url:"https://github.com/search?q="+encodeURIComponent('"'+query+'" ethereum')+"&type=code"}
+  ]};
+}
+
 export default {
- async fetch(request) {
+ async fetch(request,env,context) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
   if(request.method!=="GET")return reply(request,{error:"Read-only API"},405);
   const u=new URL(request.url),path=u.pathname;
+  // Cache public lookups at the edge so retries and repeated searches do not hammer upstream indexers.
+  const cacheable=new Set(["/lookup","/resolve","/multichain","/name-search"]);
+  const cache=typeof caches!=="undefined"&&caches?.default?caches.default:null;
+  if(cacheable.has(path)&&cache){
+    try {const hit=await cache.match(request);if(hit)return hit;}catch(e){}
+  }
+  const send=(data,status=200)=>{
+    const response=reply(request,data,status);
+    if(status===200&&cacheable.has(path)&&cache){
+      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:180));
+      try {
+        const task=cache.put(request,response.clone());
+        if(context?.waitUntil)context.waitUntil(task);else task.catch(()=>{});
+      }catch(e){}
+    }
+    return response;
+  };
   if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
-  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction"].includes(path))return reply(request,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search"].includes(path))return reply(request,{error:"Not found"},404);
   try{
-   if(path==="/resolve")return reply(request,await resolveEns(u.searchParams.get("name")));
+   if(path==="/name-search")return send(await discoverPublicEnsNames(u.searchParams.get("q")));
+   if(path==="/resolve")return send(await resolveEns(u.searchParams.get("name")));
    if(path==="/transaction"){const hash=u.searchParams.get("hash")||"";if(!/^0x[a-fA-F0-9]{64}$/.test(hash))failure("Valid 0x + 64-digit transaction hash required.",400);return reply(request,await inspectTransaction(hash,u.searchParams.get("network")||"ethereum"));}
    if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return reply(request,await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}
-   if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return reply(request,await scanEvm(address));if(BTC.test(address))return reply(request,await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return reply(request,await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
+   if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return send(await scanEvm(address));if(BTC.test(address))return send(await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return send(await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
    const address=u.searchParams.get("address")||"";
    if(!ADDRESS.test(address))failure("Provide exactly 40 hexadecimal digits after 0x",400);
-   return reply(request,path==="/origin"?await origin(address):await investigate(address));
+   return path==="/origin"?reply(request,await origin(address)):send(await investigate(address));
   }catch(e){return reply(request,{error:e.status===503?"Public data sources unavailable; please try again.":String(e.message||"Lookup failed")},e.status||502);}
  }
 };

@@ -9,8 +9,8 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-casefinder-tx">
-  <script src="app.js?v=20261030-casefinder" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261030-names-v1">
+  <script src="app.js?v=20261030-names-v1" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -33,14 +33,15 @@
       <div class="section-head"><div><h2 id="explore-title">Investigate a wallet</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
       <div class="panel">
         <form id="lookup-form" novalidate>
-          <label for="wallet">Wallet address or ENS name</label>
+          <label for="wallet">Wallet, transaction hash or name</label>
           <div class="input-row">
-            <input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Wallet, 0x transaction hash, or name.eth" aria-describedby="wallet-help" maxlength="260" required>
+            <input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Name, ENS, wallet or transaction hash" aria-describedby="wallet-help" maxlength="260" required>
             <button id="lookup-button" class="button primary" type="submit">Search <span aria-hidden="true">→</span></button>
           </div>
-          <div class="form-foot"><span id="wallet-help">Ethereum and EVM networks, Bitcoin, Solana</span><button class="text-button" type="button" id="example">Try example ↗</button></div>
+          <div class="form-foot"><span id="wallet-help">Public ENS name search · EVM · Bitcoin · Solana</span><button class="text-button" type="button" id="example">Try example ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Paste a wallet address, ENS name, or EVM transaction hash.</p>
+        <div id="name-results" class="name-results" hidden></div>
         <div id="transaction-result" class="transaction-result" hidden></div>
         <div id="chain-results" class="chain-results" hidden></div>
         <div id="results" hidden>

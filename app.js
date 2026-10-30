@@ -79,6 +79,7 @@
       return {data,provider:"NODIVRA gateway · Blockscout"};
     } catch(e) {
       if(signal.aborted)throw e;
+      if(/429|rate limit/i.test(e.message))throw new Error("The public transaction index is rate-limited (HTTP 429). No wallet history is available right now; use the cross-chain RPC summary or retry later.");
       const root=DIRECT+"/addresses/"+encodeURIComponent(address);
       const jobs=await Promise.allSettled([fetchJson(root,signal,10000),fetchJson(root+"/transactions",signal,10000),fetchJson(root+"/token-transfers",signal,10000),fetchJson(root+"/internal-transactions",signal,10000)]);
       if(!valOK(jobs))throw new Error("Gateway unavailable ("+e.message+"); direct API also blocked or unavailable.");
@@ -671,7 +672,67 @@
     return true;
   }
 
+
+  function isPublicNameQuery(value) {
+    const raw=String(value||"").trim();
+    return raw.length>=3&&raw.length<=72&&!/^0x/i.test(raw)&&!raw.toLowerCase().endsWith(".eth")&&!/^bc1/i.test(raw)&&
+      /^[\p{L}\p{N}][\p{L}\p{N} .'-]*$/u.test(raw)&&!isBitcoin(raw)&&!isSolana(raw);
+  }
+  async function searchPublicNames(value){
+    const query=String(value||"").trim(),controller=new AbortController();
+    if(activeRequest)activeRequest.abort();
+    activeRequest=controller;activeAddress="";evidenceSnapshot=null;flowEvidence=null;
+    const box=$("name-results");box.replaceChildren();box.hidden=false;
+    $("transaction-result").hidden=true;$("chain-results").hidden=true;results.hidden=true;
+    $("trace-leads").hidden=true;$("trace-details").hidden=true;$("case-workspace").hidden=true;
+    button.disabled=true;button.textContent="Searching…";
+    setStatus("Searching public ENS names related to "+query+"…");
+    try {
+      const response=await fetchJson(API+"/name-search?q="+encodeURIComponent(query),controller.signal,19000);
+      if(activeRequest!==controller)return;
+      const heading=element("div","name-heading");
+      heading.appendChild(element("strong","","PUBLIC ENS NAME CANDIDATES"));
+      heading.appendChild(element("span","",String(response.results?.length||0)+" indexed matches"));
+      box.appendChild(heading);
+      box.appendChild(element("p","minor","These are public name matches, NOT confirmed wallets belonging to the person you entered."));
+      const items=Array.isArray(response.results)?response.results:[];
+      if(!items.length)box.appendChild(element("p","case-attention","No matching registered ENS names were returned. This does not mean the person has no crypto wallets."));
+      for(const item of items.slice(0,10)){
+        const row=element("div","name-candidate");
+        const title=element("div","name-candidate-title");
+        title.appendChild(element("strong","",item.ens_name));
+        title.appendChild(element("span","","PUBLIC ENS MATCH · PERSON UNVERIFIED"));
+        row.appendChild(title);
+        const controls=element("div","name-candidate-actions");
+        const ens=link(item.evidence_url,"ENS record ↗");
+        controls.appendChild(ens);
+        const inspect=element("button","trace-button","Resolve & inspect →");
+        inspect.type="button";inspect.addEventListener("click",()=>lookup(item.ens_name));
+        controls.appendChild(inspect);
+        row.appendChild(controls);
+        box.appendChild(row);
+      }
+      const research=element("div","name-research");
+      research.appendChild(element("strong","","Verify independent public disclosures"));
+      for(const result of response.independent_research||[]){
+        if(result.url?.startsWith("https://"))research.appendChild(link(result.url,result.title+" ↗"));
+      }
+      box.appendChild(research);
+      box.appendChild(element("p","lead-disclaimer","ENS registration is not proof of a real person's identity. Check authenticated public claims and current wallet resolution before attributing ownership."));
+      if(response.warnings?.length)box.appendChild(element("p","minor","Some provider lookups failed: "+response.warnings.join("; ")));
+      setStatus(items.length?items.length+" public ENS candidates found. None is automatically attributed to the name.":"No matching ENS names found in this limited public index. Explore other public claims or search by wallet.");
+    }catch(err){
+      if(activeRequest!==controller)return;
+      box.appendChild(element("p","case-attention","Public ENS search unavailable: "+err.message+". Try again after the provider's rate limit resets."));
+      setStatus("The ENS name index is unavailable; this does not mean the name has no blockchain connections.",true);
+    }finally{
+      if(activeRequest===controller){scanAllNetworks(normalized,controller);button.disabled=false;button.textContent="Search →";}
+    }
+  }
+
   async function lookup(address) {
+    if(isPublicNameQuery(address)){await searchPublicNames(address);return;}
+    $("name-results").hidden=true;
     if(/^0x[a-fA-F0-9]{64}$/.test(String(address||"").trim())){await investigateTransaction(address);return;}
     $("transaction-result").hidden=true;
     if(isBitcoin(address)||isSolana(address)){
@@ -717,7 +778,7 @@
       if(activeRequest!==controller)return;
       activeAddress=normalized;
       input.value=normalized;
-      scanAllNetworks(normalized,controller);
+      // Cross-chain scan runs after the primary lookup to reduce API rate-limit spikes.
       $("explorer-link").href=BLOCKSCOUT+normalized;
       $("result-address").textContent=normalized;
       $("balance").textContent="—";$("shown").textContent="—";$("account-type").textContent="—";
@@ -807,7 +868,7 @@
   $("case-report").addEventListener("click",exportCaseDossier);
   $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
-  if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)||/^0x[a-fA-F0-9]{64}$/.test(initial)))lookup(initial);
+  if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)||isPublicNameQuery(initial)||/^0x[a-fA-F0-9]{64}$/.test(initial)))lookup(initial);
   function background(){
     const canvas=$("bg-canvas");
     if(!canvas||matchMedia("(prefers-reduced-motion: reduce)").matches)return;

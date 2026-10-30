@@ -4,9 +4,11 @@
 
 I started NODIVRA because I kept seeing wallet addresses in crypto investigations, but finding out what actually happened meant jumping between explorers and long lists of transactions.
 
-I wanted one place to start: enter an address or an EVM transaction hash, see where it appears, follow the transfers, check the public labels, and keep track of what I can *actually* verify.
+I wanted one place to start: start with a public name, an ENS alias, an address or an EVM transaction hash, see what can actually be verified, follow the transfers, check the public labels, and keep track of what I can *actually* verify.
 
 The current version searches Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana for publicly indexed activity. On EVM networks, the investigation engine also follows native and token transfers up to two hops, shows the relationships in a visual graph, and helps identify practical next steps: which transactions to check, which publicly labelled services need independent verification, and where the trail becomes uncertain. You can export a source-backed case dossier.
+
+The public name search checks registered ENS-domain matches and suggests independent checks for public wallet disclosures. An ENS name that resembles someone's name is **not** evidence that the person owns it.
 
 NODIVRA is **not** a way to magically reveal who owns an anonymous wallet. If there isn't a reliable public attribution, I want it to say **unknown**.
 

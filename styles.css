@@ -240,3 +240,17 @@ body{background:#071219}
 .tx-counterparty div{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
 .tx-counterparty strong{font-family:ui-monospace,monospace;font-size:12px}
 .tx-evidence>a{display:inline-block;color:#70f9c5;font-size:12px;margin:10px 0}
+
+.name-results{margin:12px 0;padding:13px;border:1px solid #326958;border-radius:9px;background:#0c2425}
+.name-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:11px}
+.name-heading strong{color:#80edc6}.name-heading span{color:#94aea8}
+.name-candidate{display:flex;justify-content:space-between;gap:12px;padding:10px 2px;border-top:1px solid #274c43}
+.name-candidate-title{min-width:0;display:grid;gap:4px;overflow-wrap:anywhere}
+.name-candidate-title strong{font-size:13px;color:#e1f4ef}
+.name-candidate-title span{font-size:9px;color:#91b3a5}
+.name-candidate-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.name-candidate-actions a{font-size:11px;color:var(--accent)}
+.name-research{border-top:1px solid #2b5149;padding-top:11px;display:flex;flex-wrap:wrap;gap:9px;align-items:center}
+.name-research strong{font-size:11px}
+.name-research a{font-size:11px;color:var(--accent)}
+@media(max-width:620px){.name-candidate{flex-direction:column}.name-candidate-actions{justify-content:start}}
