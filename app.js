@@ -405,7 +405,7 @@
       flowEvidence=report;renderFlowGraph(report);
       state.textContent="Evidence graph created from indexed transactions. Open the linked source before relying on any attribution.";
     }catch(e){if(sequence===investigationSequence)state.textContent="Investigation unavailable: "+e.message+". This is not evidence of an empty wallet.";}
-    finally{if(sequence===investigationSequence){button.disabled=false;button.textContent="Run investigation ↗";}}
+    finally{if(sequence===investigationSequence){button.disabled=false;button.textContent="Trace ↗";}}
   }
 
   function renderAttribution(data) {
@@ -476,48 +476,51 @@
   function isSolana(value){return SOLANA_ADDRESS_RE.test(String(value||"").trim())&&!isBitcoin(value);}
   function chainResult(data) {
     const root=$("chain-results");root.replaceChildren();root.hidden=false;
-    if(!data || !Array.isArray(data.networks)){root.appendChild(element("p","minor","Cross-chain evidence is unavailable."));return;}
-    const head=element("div","chain-header");
-    head.appendChild(element("div","tiny-label","NODIVRA · CROSS-CHAIN DISCOVERY"));
-    head.appendChild(element("h3","","Where does this address appear?"));
-    head.appendChild(element("p","minor",data.discovery?.summary||"Network coverage available below."));
-    root.appendChild(head);
-    const n=element("div","chain-grid");
-    for(const network of data.networks){
-      const card=element("article","chain-card");
-      const top=element("div","chain-card-head");
-      top.appendChild(element("strong","",network.name));
-      top.appendChild(element("span","chain-status",network.status==="activity_observed"?"OBSERVED":network.status==="indexed_no_sample_activity"?"NO INDEXED ACTIVITY":network.status==="not_indexed"?"NOT INDEXED":"UNAVAILABLE"));
-      card.appendChild(top);
-      const balance=network.native_balance===null||network.native_balance===undefined?"Balance unavailable":network.native_balance+" "+network.symbol;
-      card.appendChild(element("div","chain-balance",balance));
-      const tokens=Array.isArray(network.assets)?network.assets:[];
-      if(tokens.length){
-        const body=element("div","chain-tokens");
-        body.appendChild(element("div","tiny-label","TOKEN BALANCES · INDEXED"));
-        for(const asset of tokens.slice(0,7)) {
-          const row=element("div","chain-token");
-          row.appendChild(element("span","",asset.symbol));
-          row.appendChild(element("strong","",asset.amount));
-          body.appendChild(row);
-        }
-        card.appendChild(body);
-      }
-      const tx=network.transaction_count??(Array.isArray(network.recent_transactions)&&network.checks?.transactions==="ok"?network.recent_transactions.length:null);
-      card.appendChild(element("p","minor",tx===null?"Transaction count unavailable":String(tx)+(network.transaction_count===null?" recent transactions shown":" confirmed transactions")));
-      if(network.public_labels?.length){
-        const labels=element("div","chain-labels");
-        for(const tag of network.public_labels.slice(0,2))labels.appendChild(element("p","minor",tag.type+": "+tag.label+" · public explorer label"));
-        card.appendChild(labels);
-      }
-      if(network.warnings?.length && network.status!=="activity_observed")card.appendChild(element("p","minor",network.warnings[0]));
-      if(network.explorer_url?.startsWith("https://"))card.appendChild(link(network.explorer_url,"Verify on explorer ↗"));
-      n.appendChild(card);
+    if(!data||!Array.isArray(data.networks)){
+      root.appendChild(element("p","minor","Cross-chain evidence unavailable."));return;
     }
-    root.appendChild(n);
-    const notes=element("p","minor chain-notes",data.limitations||"Public indexed data only.");
-    root.appendChild(notes);
+    const networks=data.networks;
+    const observed=networks.filter(n=>n.status==="activity_observed");
+    const unavailable=networks.filter(n=>n.status==="unavailable");
+    const summary=element("div","network-overview");
+    const headline=element("div","network-headline");
+    headline.appendChild(element("strong","",data.format==="bitcoin"?"Bitcoin address":data.format==="solana"?"Solana address":"Cross-chain overview"));
+    headline.appendChild(element("span","network-count",observed.length+" active · "+unavailable.length+" unavailable · "+networks.length+" checked"));
+    summary.appendChild(headline);
+    const chipRow=element("div","network-chips");
+    for(const network of networks) {
+      const chip=element("span","network-chip "+(network.status==="activity_observed"?"is-active":network.status==="unavailable"?"is-unavailable":"is-empty"));
+      chip.appendChild(element("strong","",network.name));
+      chip.appendChild(element("span","",network.status==="activity_observed"?"Activity":network.status==="unavailable"?"Unavailable":network.status==="not_indexed"?"Not indexed":"No activity found"));
+      chipRow.appendChild(chip);
+    }
+    summary.appendChild(chipRow);
+    root.appendChild(summary);
+    const details=element("details","network-details");
+    const title=element("summary","","Network balances & source details");
+    details.appendChild(title);
+    const list=element("div","network-lines");
+    for(const network of networks) {
+      const row=element("div","network-line");
+      const heading=element("div","network-line-heading");
+      heading.appendChild(element("strong","",network.name));
+      const text=network.status==="unavailable"?"Provider unavailable":network.native_balance===null||network.native_balance===undefined?"Balance unknown":network.native_balance+" "+network.symbol;
+      heading.appendChild(element("span","",text));
+      row.appendChild(heading);
+      const tokens=Array.isArray(network.assets)?network.assets:[];
+      if(tokens.length) {
+        const tokenRow=element("div","network-tokenline",tokens.slice(0,8).map(t=>t.amount+" "+t.symbol).join(" · "));
+        row.appendChild(tokenRow);
+      }
+      if(network.warnings?.length)row.appendChild(element("p","minor",network.warnings[0]));
+      if(network.explorer_url?.startsWith("https://"))row.appendChild(link(network.explorer_url,"Verify ↗"));
+      list.appendChild(row);
+    }
+    details.appendChild(list);
+    root.appendChild(details);
+    root.appendChild(element("p","network-disclaimer","Unavailable ≠ zero. Public labels and balances are not identity evidence."));
   }
+
   async function scanAllNetworks(address,controller){
     const root=$("chain-results");
     root.hidden=false;root.replaceChildren();
@@ -544,10 +547,10 @@
       input.value=activeAddress;results.hidden=true;
       ++investigationSequence;flowEvidence=null;evidenceSnapshot=null;
       $("trace-output").hidden=true;
-      button.disabled=true;button.textContent="Investigating…";
+      button.disabled=true;button.textContent="Searching…";
       setStatus("Searching public activity on "+(isBitcoin(address)?"Bitcoin":"Solana")+"…");
       try {await scanAllNetworks(activeAddress,bitcoinController);}
-      finally {if(activeRequest===bitcoinController){button.disabled=false;button.textContent="Investigate →";}}
+      finally {if(activeRequest===bitcoinController){button.disabled=false;button.textContent="Search →";}}
       return;
     }
     const parsed=parseWalletInput(address);
@@ -560,7 +563,7 @@
     }
     if(activeRequest)activeRequest.abort();
     const controller=new AbortController();activeRequest=controller;
-    button.disabled=true;button.textContent="Investigating…";
+    button.disabled=true;button.textContent="Searching…";
     results.hidden=true;$("origin-result").hidden=true;
     evidenceSnapshot=null;
     ++investigationSequence;
@@ -582,7 +585,7 @@
       $("explorer-link").href=BLOCKSCOUT+normalized;
       $("result-address").textContent=normalized;
       $("balance").textContent="—";$("shown").textContent="—";$("account-type").textContent="—";
-      setStatus("Retrieving on-chain evidence for "+trimHash(normalized)+"…");
+      setStatus("Checking public data for "+trimHash(normalized)+"…");
       const {data,provider}=await lookupData(normalized,controller.signal);
       if(activeRequest!==controller)return;
       const account=data.account||{};
@@ -592,6 +595,16 @@
       $("coverage").textContent=provider+" · recent activity";
       evidenceSnapshot=data;
       intelligenceBrief(data,normalized);
+      const summary=$("brief-summary");
+      const labels=Array.isArray(data.public_attributions)?data.public_attributions:[];
+      const edges=Array.isArray(data.transactions)?data.transactions.length:null;
+      const description=data.intelligence?.summary;
+      summary.textContent=description ||
+        (labels.length?"Public labels found · verify sources in More evidence":
+          edges===null?"Activity index unavailable · no ownership can be inferred":
+          edges>0?edges+" recent transfers observed · owner not identified":
+          "No activity observed in this index sample · owner unknown");
+      $("advanced-evidence").open=false;
       renderAttribution(data);
       renderConnections(data,normalized);
       renderTokens(data);
@@ -601,7 +614,7 @@
       const internalCount=data.internal_transactions?.length||0, tokenCount=data.token_transfers?.length||0;
       const hasIndexedTx=Array.isArray(data.transactions);
       if(!hasIndexedTx) setStatus("Partial data only: transaction index unavailable. A missing history is not proof of zero transactions.",true);
-      else if(!data.transactions.length && !tokenCount && !internalCount) setStatus("No indexed activity found for this exact address in the returned samples. Please double-check every character; a different last digit is a different wallet.");
+      else if(!data.transactions.length && !tokenCount && !internalCount) setStatus("No activity in the indexed sample for this exact address. Check all characters.");
       else setStatus("Found "+data.transactions.length+" recent external transactions, "+tokenCount+" token events and "+internalCount+" internal movements. These are observations, not identity proof.");
       if(data.errors?.length) {
         const note=element("span","error-details","Some evidence is unavailable: "+data.errors.slice(0,2).join("; "));
@@ -622,7 +635,7 @@
         status.appendChild(link(ETHERSCAN+normalized,"Open Etherscan ↗"));
       }
     }finally {
-      if(activeRequest===controller){button.disabled=false;button.textContent="Investigate →";}
+      if(activeRequest===controller){button.disabled=false;button.textContent="Search →";}
     }
   }
   async function traceOrigin() {
