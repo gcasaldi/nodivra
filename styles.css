@@ -28,3 +28,12 @@
 #bg-canvas{z-index:0}
 .header,main,.footer{position:relative;z-index:1}
 .glow{z-index:0;pointer-events:none}
+
+.attribution{margin-top:24px;border:1px solid #2c574e;border-radius:12px;padding:20px;background:linear-gradient(140deg,#092822,#0b1e27)}
+.attribution h3{margin:0 0 8px;font-size:17px}
+.attr-unknown{color:#ccdcdb;font-size:14px;padding:12px 0}
+.attr-item{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;border-top:1px solid #2a484a;padding:12px 0;font-size:13px}
+.attr-item strong{font-size:14px;color:#e5f8ef}
+.attr-item span{color:#91a7ab}
+.attr-item a{color:var(--accent);text-decoration:underline;text-underline-offset:3px;margin-left:auto}
+@media(max-width:700px){.attr-item{display:block}.attr-item span,.attr-item a{display:block;margin-top:5px}}

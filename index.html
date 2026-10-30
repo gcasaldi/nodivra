@@ -40,16 +40,17 @@
           <div class="result-header"><div><span class="tiny-label">ADDRESS</span><div id="result-address" class="wallet-address"></div></div><a id="explorer-link" href="#" target="_blank" rel="noopener noreferrer">Open in Blockscout ↗</a></div>
           <div class="metrics">
             <div class="metric"><span>ETH BALANCE</span><strong id="balance">—</strong></div>
-            <div class="metric"><span>TRANSACTIONS SHOWN</span><strong id="shown">—</strong></div>
+            <div class="metric"><span>RECENT INDEXED TX</span><strong id="shown">—</strong></div>
             <div class="metric"><span>ACCOUNT TYPE</span><strong id="account-type">—</strong></div>
           </div>
+          <div id="attribution" class="attribution"></div>
           <div class="result-controls"><button type="button" id="origin-button" class="button secondary">Trace earliest funding →</button><span id="coverage" class="coverage"></span></div>
           <div id="origin-result" class="origin-box" hidden></div>
           <div id="connections" class="connections" hidden></div>
           <div id="tokens" class="tokens" hidden></div>
           <div class="table-head"><h3>Recent transactions</h3><span>Most recent external transactions</span></div>
           <div id="transactions" class="tx-list"></div>
-          <p class="disclaimer">Data: Blockscout public Ethereum API through a read-only gateway, with direct fallback. This explorer shows a recent sample and a bounded origin scan; it does not prove identity or wrongdoing. Internal transfers and token transfers are shown separately where available.</p>
+          <p class="disclaimer">Data: Blockscout, Ethereum RPC and eth-labels public dataset through a read-only gateway, with direct fallback. This explorer shows a recent sample and a bounded origin scan; it does not prove identity or wrongdoing. Internal transfers and token transfers are shown separately where available.</p>
         </div>
       </div>
     </section>

@@ -72,6 +72,7 @@
       return await response.json();
     } finally {clearTimeout(timer);if(signal)signal.removeEventListener("abort",abort);}
   }
+  function valOK(jobs) {return jobs[0]?.status==="fulfilled" || jobs.slice(1).some(j=>j.status==="fulfilled" && Array.isArray(j.value?.items));}
   async function lookupData(address,signal) {
     try {
       const data=await fetchJson(API+"/lookup?address="+encodeURIComponent(address),signal,16000);
@@ -80,10 +81,10 @@
       if(signal.aborted)throw e;
       const root=DIRECT+"/addresses/"+encodeURIComponent(address);
       const jobs=await Promise.allSettled([fetchJson(root,signal,10000),fetchJson(root+"/transactions",signal,10000),fetchJson(root+"/token-transfers",signal,10000),fetchJson(root+"/internal-transactions",signal,10000)]);
-      if(jobs.every(j=>j.status==="rejected"))throw new Error("Gateway unavailable ("+e.message+"); direct API also blocked or unavailable.");
+      if(!valOK(jobs))throw new Error("Gateway unavailable ("+e.message+"); direct API also blocked or unavailable.");
       const val=i=>jobs[i].status==="fulfilled"?jobs[i].value:null;
       const tx=val(1)?.items||[];
-      return {data:{address,account:val(0),transactions:tx,token_transfers:val(2)?.items||[],internal_transactions:val(3)?.items||[],connections:connectionsFrom(tx,address),errors:jobs.filter(j=>j.status==="rejected").map(j=>j.reason.message)},provider:"Blockscout · direct fallback"};
+      return {data:{address,account:val(0),transactions:val(1)?.items||null,token_transfers:val(2)?.items||null,internal_transactions:val(3)?.items||null,connections:connectionsFrom(tx,address),source_status:{account:val(0)?"ok":"unavailable",transactions:val(1)?"ok":"unavailable",token_transfers:val(2)?"ok":"unavailable",internal_transactions:val(3)?"ok":"unavailable"},account_source:val(0)?"Blockscout":null,public_attributions:[],errors:jobs.filter(j=>j.status==="rejected").map(j=>j.reason.message)},provider:"Blockscout · direct fallback"};
     }
   }
   function connectionsFrom(txs,address) {
@@ -118,6 +119,32 @@
     }
     target.appendChild(grid);
   }
+
+  function renderAttribution(data) {
+    const target=$("attribution");
+    if(!target)return;
+    target.replaceChildren();
+    const title=element("h3","","Public attribution & identity evidence");
+    target.appendChild(title);
+    const disclaimer=element("p","minor","A label is not proof of legal ownership. ENS names, public explorer tags and community labels have different evidence strengths.");
+    target.appendChild(disclaimer);
+    const labels=Array.isArray(data.public_attributions)?data.public_attributions:[];
+    if(!labels.length){
+      target.appendChild(element("p","attr-unknown","Unknown — no public identity or organization attribution was found in the consulted sources."));
+    }else {
+      for(const tag of labels.slice(0,12)) {
+        const row=element("div","attr-item");
+        row.appendChild(element("strong","",tag.name||"Unspecified"));
+        row.appendChild(element("span","",tag.kind||"Public source label"));
+        if(typeof tag.source_url==="string"&&tag.source_url.startsWith("https://"))
+          row.appendChild(link(tag.source_url,"Source: "+(tag.source||"public dataset")+" ↗"));
+        target.appendChild(row);
+      }
+    }
+    const from=data.account_source ? "Balance/type: "+data.account_source+". " : "Balance/type source unavailable. ";
+    const status=data.source_status||{};
+    target.appendChild(element("p","minor",from+"Index status: external "+(status.transactions||"unavailable")+", token "+(status.token_transfers||"unavailable")+", internal "+(status.internal_transactions||"unavailable")+", labels "+(status.labels||"unavailable")+"."));
+  }
   function renderTokens(data) {
     const box=$("tokens");
     box.replaceChildren();
@@ -148,7 +175,8 @@
       amount.appendChild(element("div","",showWei(tx.value)));
       row.appendChild(info);row.appendChild(amount);txList.appendChild(row);
     }
-    if(!txs.length)txList.appendChild(element("p","disclaimer","No external transactions returned. This does not exclude token or internal activity."));
+    if(!Array.isArray(data.transactions))txList.appendChild(element("p","disclaimer","External transaction index unavailable — activity is unknown, not zero."));
+    else if(!txs.length)txList.appendChild(element("p","disclaimer","No indexed external transactions returned for this address. Other activity may exist."));
   }
   function setUrl(address) {
     try {const url=new URL(location.href);url.searchParams.set("address",address);history.replaceState(null,"",url);}catch(_){}
@@ -183,16 +211,20 @@
       if(activeRequest!==controller)return;
       const account=data.account||{};
       $("balance").textContent=showWei(account.coin_balance);
-      $("shown").textContent=String(data.transactions?.length||0);
-      $("account-type").textContent=account.is_contract===true?"Contract":account.is_contract===false?"Wallet / EOA":"Unconfirmed";
+      $("shown").textContent=Array.isArray(data.transactions)?String(data.transactions.length):"Unavailable";
+      $("account-type").textContent=account.is_contract===true?"Contract":account.is_contract===false?"EOA (technical type)":"Unverified";
       $("coverage").textContent=provider+" · recent activity";
+      renderAttribution(data);
       renderConnections(data,normalized);
       renderTokens(data);
       renderTransactions(data,normalized);
       results.hidden=false;
       setUrl(normalized);
       const internalCount=data.internal_transactions?.length||0, tokenCount=data.token_transfers?.length||0;
-      setStatus("Loaded "+(data.transactions?.length||0)+" transactions, "+tokenCount+" token events and "+internalCount+" internal movements. Select a connected address or trace the origin.");
+      const hasIndexedTx=Array.isArray(data.transactions);
+      if(!hasIndexedTx) setStatus("Partial data only: transaction index unavailable. A missing history is not proof of zero transactions.",true);
+      else if(!data.transactions.length && !tokenCount && !internalCount) setStatus("No indexed activity found for this exact address in the returned samples. Please double-check every character; a different last digit is a different wallet.");
+      else setStatus("Found "+data.transactions.length+" recent external transactions, "+tokenCount+" token events and "+internalCount+" internal movements. These are observations, not identity proof.");
       if(data.errors?.length) {
         const note=element("span","error-details","Some evidence is unavailable: "+data.errors.slice(0,2).join("; "));
         status.appendChild(note);
