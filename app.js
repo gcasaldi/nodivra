@@ -281,6 +281,8 @@
 
   const BTC_ADDRESS_RE = /^(?:bc1[ac-hj-np-z02-9]{11,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/;
   function isBitcoin(value){return BTC_ADDRESS_RE.test(String(value||"").trim());}
+  const SOLANA_ADDRESS_RE=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  function isSolana(value){return SOLANA_ADDRESS_RE.test(String(value||"").trim())&&!isBitcoin(value);}
   function chainResult(data) {
     const root=$("chain-results");root.replaceChildren();root.hidden=false;
     if(!data || !Array.isArray(data.networks)){root.appendChild(element("p","minor","Cross-chain evidence is unavailable."));return;}
@@ -333,9 +335,9 @@
       const data=await fetchJson(API+"/multichain?address="+encodeURIComponent(address),controller.signal,30000);
       if(activeRequest!==controller)return;
       chainResult(data);
-      if(data.format==="bitcoin"){
+      if(data.format==="bitcoin"||data.format==="solana"){
         results.hidden=true;
-        setStatus("Bitcoin investigation: "+(data.networks?.[0]?.transaction_count??"unavailable")+" confirmed transactions in the indexed address history. Use the linked explorer to inspect individual transfers.");
+        setStatus(data.format==="bitcoin"?"Bitcoin address investigation: "+(data.networks?.[0]?.transaction_count??"unavailable")+" confirmed transactions in the indexed address history.":"Solana address investigation: current balances and indexed recent signatures. Use the linked explorer for full details.");
       }
     }catch(e){
       if(activeRequest!==controller)return;
@@ -344,13 +346,13 @@
   }
 
   async function lookup(address) {
-    if(isBitcoin(address)){
+    if(isBitcoin(address)||isSolana(address)){
       if(activeRequest)activeRequest.abort();
       const bitcoinController=new AbortController();
       activeRequest=bitcoinController;activeAddress=String(address).trim();
       input.value=activeAddress;results.hidden=true;
       button.disabled=true;button.textContent="Investigating…";
-      setStatus("Searching the Bitcoin address and its confirmed transactions…");
+      setStatus("Searching public activity on "+(isBitcoin(address)?"Bitcoin":"Solana")+"…");
       try {await scanAllNetworks(activeAddress,bitcoinController);}
       finally {if(activeRequest===bitcoinController){button.disabled=false;button.textContent="Investigate →";}}
       return;
@@ -456,7 +458,7 @@
   originBtn.addEventListener("click",traceOrigin);
   $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
-  if(initial&&(normalize(initial)||isBitcoin(initial)))lookup(initial);
+  if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)))lookup(initial);
   function background(){
     const canvas=$("bg-canvas");
     if(!canvas||matchMedia("(prefers-reduced-motion: reduce)").matches)return;

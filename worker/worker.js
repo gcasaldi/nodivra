@@ -361,6 +361,61 @@ async function scanBitcoin(address) {
  limitations:"Bitcoin address search does not identify a whole wallet or all addresses derived from the same keys. Token balances and cross-chain identity cannot be inferred.",checked_at:new Date().toISOString()};
 }
 
+
+const SOLANA_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+async function solanaMethod(method,params) {
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8500);
+ try {
+  const response=await fetch(SOLANA_RPC,{method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({jsonrpc:"2.0",id:1,method,params}),signal:controller.signal});
+  if(!response.ok)throw Error("Solana RPC HTTP "+response.status);
+  const obj=await response.json();
+  if(obj.error)throw Error("Solana RPC: "+String(obj.error.message||"unavailable"));
+  if(obj.result===null || obj.result===undefined)throw Error("Solana RPC empty result");
+  return obj.result;
+ }finally{clearTimeout(timer);}
+}
+async function scanSolana(address) {
+ const TOKEN_PROGRAM="TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+ const TOKEN_2022="TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+ const calls=await Promise.allSettled([
+  solanaMethod("getBalance",[address,{commitment:"confirmed"}]),
+  solanaMethod("getSignaturesForAddress",[address,{limit:10,commitment:"confirmed"}]),
+  solanaMethod("getTokenAccountsByOwner",[address,{programId:TOKEN_PROGRAM},{encoding:"jsonParsed",commitment:"confirmed"}]),
+  solanaMethod("getTokenAccountsByOwner",[address,{programId:TOKEN_2022},{encoding:"jsonParsed",commitment:"confirmed"}])
+ ]);
+ const val=i=>calls[i].status==="fulfilled"?calls[i].value:null;
+ const value=val(0);
+ const lamports=typeof value?.value==="number" && Number.isSafeInteger(value.value)?String(value.value):null;
+ const signatures=Array.isArray(val(1))?val(1):null;
+ const assets=[];
+ for(const i of [2,3])for(const item of Array.isArray(val(i)?.value)?val(i).value:[]) {
+  const info=item?.account?.data?.parsed?.info,tokenAmount=info?.tokenAmount;
+  if(!tokenAmount || !/^\d+$/.test(String(tokenAmount.amount||""))||BigInt(String(tokenAmount.amount))===0n)continue;
+  assets.push({symbol:"SPL token",name:"Token mint "+String(info?.mint||"unknown").slice(0,10)+"…",
+    contract:String(info?.mint||""),type:i===3?"Token-2022":"SPL",
+    amount:String(tokenAmount.uiAmountString||"0"),source:"Solana RPC · on-chain token account",
+    note:"No trusted token ticker mapping. Token mint must be checked independently."});
+ }
+ if(lamports===null && signatures===null && calls.slice(2).every(v=>v.status==="rejected"))
+   failure("Solana public RPC unavailable for this address.",503);
+ const observed=(lamports!==null&&BigInt(lamports)>0n)||assets.length>0||(signatures?.length||0)>0;
+ const network={id:"solana",name:"Solana",symbol:"SOL",explorer_url:"https://solscan.io/account/"+address,
+  status:observed?"activity_observed":"indexed_no_sample_activity",
+  native_balance:lamports!==null?(BigInt(lamports)/1000000000n).toString()+"."+String(BigInt(lamports)%1000000000n).padStart(9,"0"):"Unavailable",
+  native_balance_lamports:lamports,assets:assets.slice(0,20),transaction_count:null,
+  recent_transactions:(signatures||[]).map(s=>({hash:s.signature,timestamp:s.blockTime?new Date(s.blockTime*1000).toISOString():null,source:"https://solscan.io/tx/"+s.signature})),
+  public_labels:[],checks:{account:lamports===null?"unavailable":"ok",transactions:signatures===null?"unavailable":"ok",tokens:calls[2].status==="fulfilled"||calls[3].status==="fulfilled"?"partial_or_ok":"unavailable"},
+  warnings:["Public Solana RPC is rate-limited. On-chain SPL mint addresses are not validated token brands. The query is not a complete wallet history."]};
+ return {address,format:"solana",network_scope:["Solana mainnet"],networks:[network],
+  discovery:{active_networks_observed:observed?["Solana"]:[],labels:[],checked_networks:lamports!==null?1:0,total_networks:1,
+   summary:observed?"Solana balances, token accounts or recent signatures observed.":"No activity observed in the public sample; check source status.",
+   goal:"Trace public transactions and token mints; a Solana address has no public mandatory owner registration."},
+  limitations:"Solana RPC samples current balance, SPL token account holdings and recent signatures, not every past transaction. No verified name or legal owner is inferred.",
+  checked_at:new Date().toISOString()};
+}
+
 export default {
  async fetch(request) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
@@ -370,7 +425,7 @@ export default {
   if(!["/lookup","/origin","/resolve","/multichain"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/resolve")return reply(request,await resolveEns(u.searchParams.get("name")));
-   if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return reply(request,await scanEvm(address));if(BTC.test(address))return reply(request,await scanBitcoin(address));failure("Enter a valid EVM (0x...) or Bitcoin mainnet address.",400);}
+   if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return reply(request,await scanEvm(address));if(BTC.test(address))return reply(request,await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return reply(request,await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
    const address=u.searchParams.get("address")||"";
    if(!ADDRESS.test(address))failure("Provide exactly 40 hexadecimal digits after 0x",400);
    return reply(request,path==="/origin"?await origin(address):await investigate(address));
