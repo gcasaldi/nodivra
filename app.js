@@ -313,6 +313,74 @@
     return shell;
   }
 
+
+  function renderInvestigationLeads(report) {
+    const root=$("trace-leads");
+    root.replaceChildren();root.hidden=false;
+    const leads=report.investigator_leads;
+    if(!leads) {
+      root.appendChild(element("p","case-attention","The API returned transaction evidence but no investigator lead summary. Inspect the graph and hashes before reaching any conclusion."));
+      return;
+    }
+    const topline=element("div","lead-topline");
+    topline.appendChild(element("strong","","INVESTIGATION LEADS"));
+    topline.appendChild(element("span","",report.stats.transfers+" transfers · "+leads.top_leads.length+" leads"));
+    root.appendChild(topline);
+    root.appendChild(element("p","lead-summary",leads.first_action));
+    if(report.coverage?.partial)root.appendChild(element("p","case-attention","Partial coverage: one or more sources did not respond. Missing data is not evidence of an inactive address."));
+    if(!leads.top_leads.length)root.appendChild(element("p","case-attention","No linked counterparty was observed in the returned sample. Verify the address and try a different network or direction."));
+    for(const lead of (leads.top_leads||[]).slice(0,5)) {
+      const item=element("article","lead-item");
+      const info=element("div","lead-info");
+      const title=lead.public_label?lead.public_label:trimHash(lead.target_address);
+      info.appendChild(element("strong","",title));
+      info.appendChild(element("span","lead-type",lead.public_label?"PUBLIC TAG · VERIFY SOURCE":"OWNER UNKNOWN"));
+      info.appendChild(element("span","",lead.direction+" · "+lead.observed_transfers+" observed transfer(s) · "+lead.assets.slice(0,4).join(", ")));
+      item.appendChild(info);
+      const actions=element("div","lead-actions");
+      const first=lead.evidence?.[0];
+      if(first?.url?.startsWith("https://"))actions.appendChild(link(first.url,"Verify tx ↗"));
+      if(lead.label_provenance?.url?.startsWith("https://"))actions.appendChild(link(lead.label_provenance.url,"Label source ↗"));
+      const explore=element("button","trace-button","Follow →");
+      explore.type="button";explore.title="Investigate "+lead.target_address;
+      explore.addEventListener("click",()=>{
+        input.value=lead.target_address;
+        lookup(lead.target_address);
+        $("explore").scrollIntoView({behavior:"smooth"});
+      });
+      actions.appendChild(explore);item.appendChild(actions);
+      const note=element("p","lead-note",lead.next_action);
+      item.appendChild(note);root.appendChild(item);
+    }
+    root.appendChild(element("p","lead-disclaimer","Public tags are investigation leads, not verified owners. Transfer links are not proof of shared control."));
+  }
+  function exportCaseDossier(){
+    if(!flowEvidence){$("trace-state").textContent="Run a trace before exporting a dossier.";return;}
+    const note=$("case-notes").value.trim(),caseRef=$("case-reference").value.trim();
+    const selectedNetwork=$("trace-network").value;
+    const caseData={
+      title:"NODIVRA · public evidence investigation dossier",
+      case_reference:caseRef||null,
+      created_at:new Date().toISOString(),
+      investigator_notes:note||null,
+      network:selectedNetwork,
+      subject:flowEvidence.address,
+      findings:flowEvidence.investigator_leads||null,
+      observed_graph:flowEvidence.graph,
+      sources:flowEvidence.osint?.sources||[],
+      source_coverage:flowEvidence.coverage,
+      limits:flowEvidence.limitations,
+      warning:"Read-only public data. This file is not a certified chain-of-custody record, a legal identification, or proof of criminal involvement."
+    };
+    const contents=JSON.stringify(caseData,null,2);
+    const blob=new Blob([contents],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="nodivra-case-"+flowEvidence.address.slice(0,12)+"-"+Date.now()+".json";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
+
   function renderFlowGraph(report) {
     const root=$("trace-output");root.replaceChildren();root.hidden=false;
     const top=element("div","trace-summary");
@@ -395,6 +463,7 @@
     }
     const sequence=++investigationSequence;
     flowEvidence=null;output.hidden=true;output.replaceChildren();
+    $("trace-leads").hidden=true;$("trace-details").hidden=true;$("case-workspace").hidden=true;
     button.disabled=true;button.textContent="Tracing…";
     state.textContent="Querying public transfers, tracing counterparties and checking available public labels…";
     const network=$("trace-network").value,direction=$("trace-direction").value,depth=$("trace-depth").value;
@@ -402,8 +471,12 @@
       const query=new URLSearchParams({address,network,direction,depth});
       const report=await fetchJson(API+"/investigate?"+query.toString(),null,40000);
       if(address!==activeAddress||sequence!==investigationSequence){return;}
-      flowEvidence=report;renderFlowGraph(report);
-      state.textContent="Evidence graph created from indexed transactions. Open the linked source before relying on any attribution.";
+      flowEvidence=report;renderInvestigationLeads(report);renderFlowGraph(report);
+      $("trace-details").hidden=false;
+      $("case-workspace").hidden=false;
+      $("trace-details").open=false;
+      $("case-workspace").open=false;
+      state.textContent="Investigation completed. Review the leads and verify the linked transactions.";
     }catch(e){if(sequence===investigationSequence)state.textContent="Investigation unavailable: "+e.message+". This is not evidence of an empty wallet.";}
     finally{if(sequence===investigationSequence){button.disabled=false;button.textContent="Trace ↗";}}
   }
@@ -548,6 +621,7 @@
       input.value=activeAddress;results.hidden=true;
       ++investigationSequence;flowEvidence=null;evidenceSnapshot=null;
       $("trace-output").hidden=true;
+      $("trace-leads").hidden=true;$("trace-details").hidden=true;$("case-workspace").hidden=true;
       button.disabled=true;button.textContent="Searching…";
       setStatus("Searching public activity on "+(isBitcoin(address)?"Bitcoin":"Solana")+"…");
       try {await scanAllNetworks(activeAddress,bitcoinController);}
@@ -569,6 +643,7 @@
     evidenceSnapshot=null;
     ++investigationSequence;
     flowEvidence=null;
+    $("trace-leads").hidden=true;$("trace-details").hidden=true;$("case-workspace").hidden=true;
     $("trace-output").hidden=true;
     $("trace-state").textContent="Run an investigation to build an evidence-backed flow graph.";
     let normalized=parsed.address;
@@ -669,6 +744,7 @@
   $("example").addEventListener("click",()=>lookup("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
   originBtn.addEventListener("click",traceOrigin);
   $("trace-button").addEventListener("click",runInvestigation);
+  $("case-report").addEventListener("click",exportCaseDossier);
   $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
   if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)))lookup(initial);

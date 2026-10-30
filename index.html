@@ -9,8 +9,8 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-compact-rpc">
-  <script src="app.js?v=20261030-compact-rpc" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261030-casefinder">
+  <script src="app.js?v=20261030-casefinder" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -26,11 +26,11 @@
   <main>
     <section class="hero wrap" id="mission">
       <div class="eyebrow"><span class="live-dot"></span> OPEN-SOURCE BLOCKCHAIN INTELLIGENCE <span class="version">/ BETA</span></div>
-      <h1>Follow the evidence<span class="accent">.</span></h1>
-      <p class="lead">Explore wallets, trace public transfers, and understand what the evidence actually shows.</p>
+      <h1>Find the trail<span class="accent">.</span></h1>
+      <p class="lead">One address. Useful leads. Verified transactions. An evidence-backed report.</p>
     </section>
     <section class="workspace wrap" id="explore" aria-labelledby="explore-title">
-      <div class="section-head"><div><h2 id="explore-title">Investigate a wallet</h2></div><span class="badge">7 NETWORKS · READ-ONLY</span></div>
+      <div class="section-head"><div><h2 id="explore-title">Investigate a wallet</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
       <div class="panel">
         <form id="lookup-form" novalidate>
           <label for="wallet">Wallet address or ENS name</label>
@@ -55,7 +55,7 @@
           <div id="brief-summary" class="brief-summary" role="status">Identity and activity need independent verification.</div>
           <section class="investigation-panel" aria-label="Attribution and investigation engine">
             <div class="investigation-head">
-              <div><div class="tiny-label">INVESTIGATION ENGINE · BETA</div><h3>Trace transactions</h3></div>
+              <div><div class="tiny-label">INVESTIGATION ENGINE · PUBLIC EVIDENCE</div><h3>Trace transactions</h3></div>
               <span class="trace-hint">Up to 2 hops · Public evidence</span>
             </div>
             <div class="trace-controls">
@@ -64,8 +64,21 @@
               <label for="trace-depth">Depth<select id="trace-depth"><option value="2">2 hops</option><option value="1">1 hop</option></select></label>
               <button id="trace-button" type="button" class="button primary">Trace ↗</button>
             </div>
-            <div id="trace-state" role="status" aria-live="polite" class="minor">Choose a network and trace public flows.</div>
-            <div id="trace-output" hidden></div>
+            <div id="trace-state" role="status" aria-live="polite" class="minor">Trace a wallet to identify transfer leads with transaction evidence.</div>
+            <div id="trace-leads" class="trace-leads" hidden></div>
+            <details id="trace-details" class="case-details" hidden>
+              <summary>Evidence graph &amp; technical details <span aria-hidden="true">↗</span></summary>
+              <div id="trace-output" hidden></div>
+            </details>
+            <details id="case-workspace" class="case-details" hidden>
+              <summary>Case notes &amp; report <span aria-hidden="true">↗</span></summary>
+              <div class="case-fields">
+                <label for="case-reference">Case reference (optional)<input id="case-reference" type="text" maxlength="120" placeholder="Your investigation reference"></label>
+                <label for="case-notes">Investigator notes (optional)<textarea id="case-notes" maxlength="2000" rows="3" placeholder="Observations and next steps to verify"></textarea></label>
+                <p class="minor">Notes stay in this browser session. Nothing is sent to NODIVRA's server; clear them when finished. Downloads contain what you choose to enter.</p>
+                <button id="case-report" class="button secondary" type="button">Export case dossier ↗</button>
+              </div>
+            </details>
           </section>
           <details class="advanced-data" id="advanced-evidence">
             <summary>More evidence, attribution &amp; history <span aria-hidden="true">＋</span></summary>

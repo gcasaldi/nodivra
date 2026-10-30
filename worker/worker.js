@@ -540,6 +540,72 @@ async function traceEnrich(node,network){
  node.owner_status=node.labels.length?"public_tags_only":"not_identified";
  return node;
 }
+
+function buildActionableLeads(subject,nodes,edges,network){
+ const root=subject.toLowerCase(), grouped=new Map();
+ for(const edge of edges) {
+  if(edge.hop!==1)continue;
+  const from=edge.from.toLowerCase(),to=edge.to.toLowerCase();
+  const input=to===root && from!==root;
+  const output=from===root && to!==root;
+  if(!input&&!output)continue;
+  const peer=input?from:to, direction=input?"incoming":"outgoing";
+  const key=direction+"|"+peer;
+  const entry=grouped.get(key)||{counterparty:peer,direction,hop:1,observed_transfers:0,
+    assets:new Set(),evidence:[],source_label:null,source_category:null};
+  entry.observed_transfers++;
+  entry.assets.add(edge.asset);
+  if(entry.evidence.length<4)entry.evidence.push({hash:edge.tx_hash,url:edge.source_url,asset:edge.asset,
+    amount:edge.amount,timestamp:edge.timestamp,kind:edge.kind});
+  grouped.set(key,entry);
+ }
+ const findings=[];
+ for(const item of grouped.values()){
+  const node=nodes.find(n=>n.address.toLowerCase()===item.counterparty);
+  const labels=(node?.labels||[]).filter(l=>l.category!=="Transaction index label");
+  const best=labels[0]||null;
+  item.source_label=best?.name||null;
+  item.source_category=best?.category||null;
+  const isTag=!!best;
+  const action=isTag?
+    "Review the original transaction and verify this public label. If it is a regulated custodian, subscriber records would require proper legal process.":
+    "Open the transfer evidence, inspect the counterparty and check older transfers or contract calls. Owner is unknown.";
+  findings.push({
+    lead_id:"lead-"+(findings.length+1),kind:isTag?"publicly_labeled_counterparty":"unattributed_counterparty",
+    priority:isTag?"source_verification":"transaction_review",
+    target_address:item.counterparty,
+    direction:item.direction,
+    public_label:item.source_label,
+    label_provenance:best?{source:best.source,url:best.source_url,category:best.category,confidence:best.confidence}:null,
+    observed_transfers:item.observed_transfers,assets:[...item.assets],
+    evidence:item.evidence,why_it_matters:item.direction==="incoming"?
+      "Observed incoming transfers may provide a starting point to examine funding. They are not proof of the wallet's original source.":
+      "Observed outgoing transfers provide destinations to examine. They do not establish who controls the recipient.",
+    next_action:action,
+    certainty:{transfer:"on-chain indexed evidence (verify hash)",entity:"public tag only, if present",owner:"unknown"}
+  });
+ }
+ findings.sort((a,b)=>(b.public_label?1:0)-(a.public_label?1:0)||b.observed_transfers-a.observed_transfers);
+ findings.forEach((f,i)=>f.lead_id="lead-"+(i+1));
+ const serviceTouches=findings.filter(x=>x.public_label).length;
+ const unknownTouches=findings.length-serviceTouches;
+ const observation=edges.length?
+  "I found "+edges.length+" sampled transfers connecting "+findings.length+" first-hop counterparties. Follow each transaction hash to check the evidence.":
+  "The index returned no qualifying transfers in this sample. It is not evidence that the address has no history.";
+ const focus=serviceTouches?
+  "Start with the publicly labelled counterparties. Verify those names against the cited source before drawing conclusions.":
+  unknownTouches?
+  "Start with the observed counterparties and work backwards or forwards from the linked transfers. Attribution is still unknown.":
+  "First verify the address, network and provider coverage. No supported owner attribution is available.";
+ return {summary:observation,first_action:focus,top_leads:findings.slice(0,6),
+   labeled_counterparties:serviceTouches,unattributed_counterparties:unknownTouches,
+   owner:"unknown",method:"bounded on-chain transfers and cited public labels; no private records",
+   next_steps:["Verify each transaction hash in a public explorer.",
+               "Check public counterparty tags and distinguish exchange custody from individual ownership.",
+               "For a confirmed service, request private account records only through lawful procedures."],
+   caveat:"Two-hop address links do not prove that the same cryptocurrency units flowed through every intermediary."};
+}
+
 async function investigateFlows(address,options) {
  const chain=NETWORKS.find(n=>n.id===options.network)||NETWORKS[0];
  const direction=["in","out","both"].includes(options.direction)?options.direction:"in";
@@ -590,6 +656,7 @@ async function investigateFlows(address,options) {
  const primary=[address.toLowerCase(),...candidates].filter((v,i,a)=>a.indexOf(v)===i);
  await Promise.allSettled(primary.map(id=>traceEnrich(nodes.get(id),chain)));
  const finalNodes=[...nodes.values()];
+ const investigator_leads=buildActionableLeads(address,finalNodes,edges,chain);
  const sources=[{name:"Blockscout public indexed transfers",url:chain.explorer+"/address/"+address,
    kind:"primary on-chain observation",method:"API v2 address transactions and token transfers"},
   {name:"Public intelligence tags",url:chain.explorer+"/address/"+address,kind:"explorer and opt-in names"}];
@@ -601,9 +668,9 @@ async function investigateFlows(address,options) {
  const observedCounterparties=[...new Set(edges.flatMap(e=>[e.from.toLowerCase(),e.to.toLowerCase()]))]
   .filter(k=>k!==address.toLowerCase()).length;
  const publicEntities=finalNodes.filter(n=>n.labels?.some(l=>l.confidence==="public_label_only")).length;
- return {version:"0.4.0-beta",address,network:chain.name,network_id:chain.id,chain_id:chain.chain_id,asset:chain.symbol,
+ return {version:"0.5.0-beta",address,network:chain.name,network_id:chain.id,chain_id:chain.chain_id,asset:chain.symbol,
   queried_at:new Date().toISOString(),mode:{direction,depth_requested:depth,depth_achieved:edges.some(e=>e.hop===2)?2:edges.length?1:0},
-  graph:{nodes:finalNodes,edges},stats:{nodes:finalNodes.length,transfers:edges.length,entities_with_public_labels:attributed.length,
+  graph:{nodes:finalNodes,edges},investigator_leads,stats:{nodes:finalNodes.length,transfers:edges.length,entities_with_public_labels:attributed.length,
    risk_flags_reported_by_explorer:flags.length,expanded_peers:expanded.length,observed_counterparties:observedCounterparties,source_warnings:issueCount,publicly_tagged_entities:publicEntities},
   coverage:{root:root.status,expanded,problems,partial:issueCount>0,has_observed_transfers:edges.length>0,limit:TRACE_LIMITS,
    sample:"At most one recent API page per visited address. Depth 2; max four first-hop peers and three second-hop links each. Token and native transfers are distinct evidence types."},

@@ -197,3 +197,31 @@ body{background:#071219}
  .join a{white-space:normal}
  .footer{gap:8px}
 }
+
+/* OSINT-style investigative workflow: show leads first; expand the graph and dossier only when useful. */
+.trace-leads{margin-top:12px;border:1px solid #2c6557;border-radius:10px;background:#0b2426;overflow:hidden}
+.lead-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid #2b5750;font-size:11px;letter-spacing:.04em}
+.lead-topline strong{color:#7ff2cb}.lead-topline span{color:#a8bbb9}
+.lead-summary{margin:10px 14px;color:#c4dbd5;font-size:12px}
+.lead-item{padding:12px 14px;border-top:1px solid #20443e;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:3px}
+.lead-info{min-width:0;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;font-size:12px}
+.lead-info strong{color:#e5f5ed;overflow-wrap:anywhere;font-size:13px}
+.lead-info>span:not(.lead-type){font-size:11px;color:#a0b9b2}
+.lead-type{font-size:9px;letter-spacing:.03em;color:#78deb7}
+.lead-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:end;gap:9px}
+.lead-actions a{font-size:11px;color:var(--accent)}
+.lead-actions .trace-button{font-size:10px;padding:6px 8px}
+.lead-note{grid-column:1/-1;font-size:11px;line-height:1.5;color:#99b5b1;margin:2px 0 0}
+.lead-disclaimer{font-size:10px;color:#91a9a5;padding:10px 14px;margin:0;border-top:1px solid #24433d}
+.case-attention{font-size:12px;color:#f1d2a0;padding:9px 14px;margin:5px 0}
+.case-details{margin-top:9px;border:1px solid #31514d;border-radius:9px;background:#0b1f25}
+.case-details>summary{list-style:none;display:flex;justify-content:space-between;gap:8px;cursor:pointer;padding:10px 13px;font-size:12px;font-weight:600;color:#c7e3db}
+.case-details>summary::-webkit-details-marker{display:none}
+.case-details>summary span{color:var(--accent)}
+.case-details[open]>summary{border-bottom:1px solid #2d514c}
+.case-details #trace-output{padding:13px}
+.case-fields{display:grid;gap:9px;padding:13px}
+.case-fields label{font-size:11px;display:grid;gap:5px}
+.case-fields input,.case-fields textarea{background:#081a21;color:#e6f5f0;border:1px solid #315950;border-radius:7px;padding:9px;width:100%;resize:vertical}
+.case-fields .button{justify-self:start}
+@media(max-width:700px){.lead-item{grid-template-columns:1fr}.lead-actions{justify-content:start}.lead-note{grid-column:1}.lead-info{gap:6px}}

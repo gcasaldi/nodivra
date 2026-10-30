@@ -11,7 +11,8 @@ The question I want it to answer is simple: **what can I actually find out about
 - [x] Follow native and token transfers up to two hops on EVM networks.
 - [x] Visualize connected addresses and open the original transaction evidence.
 - [x] Check public names and labels, keeping their sources and uncertainty visible.
-- [x] Export a JSON investigation dossier.
+- [x] Turn observed counterparties into prioritized leads with transaction links and source-tag warnings.
+- [x] Export a JSON investigation dossier with optional case notes kept only in the browser session.
 - [x] Add clear messages when an API is unavailable or an address has no indexed activity.
 
 ## What I'm improving now
@@ -28,7 +29,8 @@ The question I want it to answer is simple: **what can I actually find out about
 - [ ] Follow Bitcoin UTXOs and Solana transactions with chain-specific investigation logic.
 - [ ] Recognize bridges, exchange deposit services, contracts and swaps without inventing ownership links.
 - [ ] Trace longer histories with careful limits and clear data coverage.
-- [ ] Compare multiple public attribution sources and show why an entity label can be trusted.
+- [ ] Compare multiple independently confirmed attribution sources and show why an entity label can be trusted.
+- [ ] Validate real investigation scenarios with external experts; a beta is not a police-grade forensic system.
 - [ ] Export a shareable, source-backed PDF report and add case workspaces.
 - [ ] Explore AI-assisted summaries that cite evidence rather than guessing.
 
