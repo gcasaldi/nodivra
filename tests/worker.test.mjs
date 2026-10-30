@@ -79,3 +79,25 @@ test('unknown paths do not trigger network requests',async()=>{
  const result=await request('/malformed');
  assert.equal(result.status,404);
 });
+
+test('transaction evidence resolves a verified hash without guessing wallet ownership',async()=>{
+ fakeFetch((url)=>{
+   const text=String(url);
+   if(text.includes('/api/v2/transactions/0x'))return {data:{
+     hash:hash('c'),from:{hash:root},to:{hash:parent},value:'1200000000000000000',
+     timestamp:'2026-10-30T15:00:00Z',status:'ok',block:567
+   }};
+   throw Error('Unexpected request');
+ });
+ const result=await request('/transaction?hash='+hash('c')+'&network=ethereum');
+ assert.equal(result.status,200);
+ assert.equal(result.json.from.address,root);
+ assert.equal(result.json.to.address,parent);
+ assert.equal(result.json.native_value,'1.2');
+ assert.ok(result.json.caveats.some(s=>s.includes('legal person')));
+});
+test('transaction hashes without a network-confirmed index response fail clearly',async()=>{
+ fakeFetch(()=>({status:404,data:{error:'not found'}}));
+ const result=await request('/transaction?hash='+hash('c')+'&network=base');
+ assert.equal(result.status,404);
+});

@@ -9,7 +9,7 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-casefinder">
+  <link rel="stylesheet" href="styles.css?v=20261030-casefinder-tx">
   <script src="app.js?v=20261030-casefinder" defer></script>
 </head>
 <body>
@@ -35,12 +35,13 @@
         <form id="lookup-form" novalidate>
           <label for="wallet">Wallet address or ENS name</label>
           <div class="input-row">
-            <input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="0x..., bc1..., Solana or name.eth" aria-describedby="wallet-help" maxlength="260" required>
+            <input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Wallet, 0x transaction hash, or name.eth" aria-describedby="wallet-help" maxlength="260" required>
             <button id="lookup-button" class="button primary" type="submit">Search <span aria-hidden="true">→</span></button>
           </div>
           <div class="form-foot"><span id="wallet-help">Ethereum and EVM networks, Bitcoin, Solana</span><button class="text-button" type="button" id="example">Try example ↗</button></div>
         </form>
-        <p class="notice" role="status" id="status" aria-live="polite">Search an address to begin.</p>
+        <p class="notice" role="status" id="status" aria-live="polite">Paste a wallet address, ENS name, or EVM transaction hash.</p>
+        <div id="transaction-result" class="transaction-result" hidden></div>
         <div id="chain-results" class="chain-results" hidden></div>
         <div id="results" hidden>
           <div class="result-header">

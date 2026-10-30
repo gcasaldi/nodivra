@@ -613,7 +613,67 @@
     }
   }
 
+
+  async function investigateTransaction(raw,network="ethereum"){
+    const hash=String(raw||"").trim();
+    if(!/^0x[a-fA-F0-9]{64}$/.test(hash))return false;
+    if(activeRequest)activeRequest.abort();
+    const controller=new AbortController();activeRequest=controller;
+    activeAddress="";evidenceSnapshot=null;flowEvidence=null;
+    const box=$("transaction-result"),networkBox=$("chain-results");
+    results.hidden=true;networkBox.hidden=true;box.hidden=false;box.replaceChildren();
+    input.value=hash;button.disabled=true;button.textContent="Searching…";
+    setStatus("Looking up transaction evidence on "+network+"…");
+    const header=element("div","tx-head");
+    header.appendChild(element("strong","","Transaction evidence"));
+    const select=element("select","tx-network-select");
+    select.setAttribute("aria-label","Blockchain network for transaction hash");
+    const chains=[["ethereum","Ethereum"],["base","Base"],["arbitrum","Arbitrum"],["optimism","Optimism"],["polygon","Polygon"]];
+    for(const [id,name] of chains){
+      const option=element("option","",name);option.value=id;option.selected=id===network;select.appendChild(option);
+    }
+    select.addEventListener("change",()=>investigateTransaction(hash,select.value));
+    header.appendChild(select);box.appendChild(header);
+    try {
+      const data=await fetchJson(API+"/transaction?"+new URLSearchParams({hash,network}).toString(),controller.signal,15000);
+      if(activeRequest!==controller)return true;
+      const verified=element("div","tx-evidence");
+      verified.appendChild(element("div","tiny-label","PUBLIC BLOCKCHAIN RECORD · "+data.network.toUpperCase()));
+      verified.appendChild(element("p","tx-hash",data.hash));
+      const meta=element("div","tx-facts");
+      for(const [label,value] of [["Native transfer",data.native_value===null?"Unknown":data.native_value+" "+data.native_symbol],["Execution",data.execution],["Timestamp",data.timestamp||"Unavailable"],["Block",data.block??"Unavailable"]]){
+        const row=element("div","");
+        row.appendChild(element("span","",label));row.appendChild(element("strong","",value));meta.appendChild(row);
+      }
+      verified.appendChild(meta);
+      for(const [kind,party] of [["Sender",data.from],["Recipient",data.to]]){
+        if(!party)continue;
+        const line=element("div","tx-counterparty");
+        const info=element("div","");
+        info.appendChild(element("span","",kind));
+        info.appendChild(element("strong","",party.public_tag||trimHash(party.address)));
+        if(party.public_tag)info.appendChild(element("span","",party.address+" · public tag, not verified owner"));
+        line.appendChild(info);
+        const act=element("button","trace-button","Investigate →");
+        act.type="button";act.addEventListener("click",()=>lookup(party.address));
+        line.appendChild(act);verified.appendChild(line);
+      }
+      const citation=link(data.source_url,"Check source transaction ↗");
+      verified.appendChild(citation);
+      verified.appendChild(element("p","minor","A transaction proves an observed on-chain event, not the legal identity of a sender or recipient."));
+      box.appendChild(verified);
+      setStatus("Transaction record found. Follow the sender or recipient to investigate related public transfers.");
+    }catch(err){
+      if(activeRequest!==controller)return true;
+      box.appendChild(element("p","case-attention","No verified result on "+network+": "+err.message+". Choose another network or verify the hash with its original explorer."));
+      setStatus("This transaction could not be verified on the selected network.",true);
+    }finally{if(activeRequest===controller){button.disabled=false;button.textContent="Search →";}}
+    return true;
+  }
+
   async function lookup(address) {
+    if(/^0x[a-fA-F0-9]{64}$/.test(String(address||"").trim())){await investigateTransaction(address);return;}
+    $("transaction-result").hidden=true;
     if(isBitcoin(address)||isSolana(address)){
       if(activeRequest)activeRequest.abort();
       const bitcoinController=new AbortController();
@@ -747,7 +807,7 @@
   $("case-report").addEventListener("click",exportCaseDossier);
   $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
-  if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)))lookup(initial);
+  if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)||/^0x[a-fA-F0-9]{64}$/.test(initial)))lookup(initial);
   function background(){
     const canvas=$("bg-canvas");
     if(!canvas||matchMedia("(prefers-reduced-motion: reduce)").matches)return;

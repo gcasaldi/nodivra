@@ -7,6 +7,7 @@ The question I want it to answer is simple: **what can I actually find out about
 ## What I've built
 
 - [x] Search public activity on Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana.
+- [x] Start from an EVM transaction hash on a selected network and follow its sender or recipient.
 - [x] Show native balances and indexed tokens where the public APIs allow it.
 - [x] Follow native and token transfers up to two hops on EVM networks.
 - [x] Visualize connected addresses and open the original transaction evidence.

@@ -688,15 +688,39 @@ async function investigateFlows(address,options) {
    "No person-level identification, geolocation or guilt conclusions are generated."]};
 }
 
+
+async function inspectTransaction(hash,networkId) {
+ const network=NETWORKS.find(n=>n.id===networkId);
+ if(!network)failure("Unsupported EVM network for transaction lookup.",400);
+ const fetched=await networkRequest(network.explorer+"/api/v2","/transactions/"+hash,10000);
+ if(fetched?.missing)failure("This transaction is not indexed on "+network.name+". Check the network or transaction hash.",404);
+ if(!fetched || fetched.hash?.toLowerCase()!==hash.toLowerCase())failure("Transaction data could not be verified from the explorer.",502);
+ const from=fetched.from?.hash||null,to=fetched.to?.hash||null;
+ const value=typeof fetched.value==="string"&&/^\d+$/.test(fetched.value)?fetched.value:null;
+ const native=value===null?null:traceValue(value,18);
+ const failureFlag=fetched.status==="error"||fetched.status==="failed";
+ return {network:network.name,network_id:network.id,hash,source:"Blockscout API v2",
+   source_url:network.explorer+"/tx/"+hash,checked_at:new Date().toISOString(),
+   from:ADDRESS.test(from||"")?{address:from,public_tag:fetched.from?.name||null}:null,
+   to:ADDRESS.test(to||"")?{address:to,public_tag:fetched.to?.name||null}:null,
+   native_value:native?.display||null,native_symbol:network.symbol,
+   timestamp:fetched.timestamp||null,block:fetched.block??null,
+   execution:failureFlag?"failed":fetched.status||"unconfirmed",contract_call:fetched.method||null,
+   caveats:["A sender or recipient address is not a verified legal person.",
+      "The transaction may contain token transfers, internal calls, swap routes or contract executions not represented by the native value.",
+      "This record is only a public explorer observation. Cross-check the hash independently."]};
+}
+
 export default {
  async fetch(request) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
   if(request.method!=="GET")return reply(request,{error:"Read-only API"},405);
   const u=new URL(request.url),path=u.pathname;
   if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
-  if(!["/lookup","/origin","/resolve","/multichain","/investigate"].includes(path))return reply(request,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/resolve")return reply(request,await resolveEns(u.searchParams.get("name")));
+   if(path==="/transaction"){const hash=u.searchParams.get("hash")||"";if(!/^0x[a-fA-F0-9]{64}$/.test(hash))failure("Valid 0x + 64-digit transaction hash required.",400);return reply(request,await inspectTransaction(hash,u.searchParams.get("network")||"ethereum"));}
    if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return reply(request,await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}
    if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return reply(request,await scanEvm(address));if(BTC.test(address))return reply(request,await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return reply(request,await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
    const address=u.searchParams.get("address")||"";

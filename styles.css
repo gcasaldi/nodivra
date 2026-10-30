@@ -225,3 +225,18 @@ body{background:#071219}
 .case-fields input,.case-fields textarea{background:#081a21;color:#e6f5f0;border:1px solid #315950;border-radius:7px;padding:9px;width:100%;resize:vertical}
 .case-fields .button{justify-self:start}
 @media(max-width:700px){.lead-item{grid-template-columns:1fr}.lead-actions{justify-content:start}.lead-note{grid-column:1}.lead-info{gap:6px}}
+
+.transaction-result{margin:12px 0;border:1px solid #2c6457;border-radius:10px;background:#0a2425;padding:15px}
+.tx-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tx-head strong{color:#e0f7eb;font-size:13px}
+.tx-network-select{background:#081d24;border:1px solid #42665c;border-radius:7px;color:#eaf5f0;padding:7px;font-size:11px}
+.tx-evidence{margin-top:13px}
+.tx-hash{font-family:ui-monospace,monospace;font-size:12px;color:#a8c6bc;overflow-wrap:anywhere}
+.tx-facts{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.tx-facts div{border:1px solid #2b514a;border-radius:6px;padding:7px 10px;display:grid;gap:4px}
+.tx-facts span,.tx-counterparty span{color:#a1b8b1;font-size:10px}
+.tx-facts strong{color:#e8f2ed;font-size:12px}
+.tx-counterparty{border-top:1px solid #2b524a;padding:11px 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tx-counterparty div{display:grid;gap:3px;min-width:0;overflow-wrap:anywhere}
+.tx-counterparty strong{font-family:ui-monospace,monospace;font-size:12px}
+.tx-evidence>a{display:inline-block;color:#70f9c5;font-size:12px;margin:10px 0}
