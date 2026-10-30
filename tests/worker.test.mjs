@@ -101,3 +101,42 @@ test('transaction hashes without a network-confirmed index response fail clearly
  const result=await request('/transaction?hash='+hash('c')+'&network=base');
  assert.equal(result.status,404);
 });
+
+test('name search returns ENS candidates without claiming a real-world owner',async()=>{
+ fakeFetch(url=>{
+   const text=String(url);
+   if(text.includes('search-domains')){
+     const term=new URL(text).searchParams.get('q');
+     return {data:{results:term==='vitalik'?[{
+       name:'vitalik.eth',availability_status:'registered',
+       ownership:{owner:'0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'}
+     }]:[]}};
+   }
+   throw Error('Unexpected lookup');
+ });
+ const result=await request('/name-search?q=Vitalik%20Buterin');
+ assert.equal(result.status,200);
+ assert.equal(result.json.results[0].ens_name,'vitalik.eth');
+ assert.equal(result.json.results[0].confidence,'ens_domain_match_only');
+ assert.match(result.json.scope,/not.*identify a legal person/i);
+});
+test('ENS resolution can use an independent resolver source when Blockscout is rate limited',async()=>{
+ fakeFetch(url=>{
+   const text=String(url);
+   if(text.includes('bens.services.blockscout'))return {status:429,data:{}};
+   if(text.includes('/api/domain/vitalik.eth/records'))return {data:{
+     records:{addresses:{'60':'0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'}}
+   }};
+   throw Error('Unexpected resolver path');
+ });
+ const result=await request('/resolve?name=vitalik.eth');
+ assert.equal(result.status,200);
+ assert.equal(result.json.address,'0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
+ assert.match(result.json.identity_claim,/public ENS record only/);
+});
+test('HTTP 429 never becomes a fabricated empty wallet history',async()=>{
+ fakeFetch(()=>({status:429,data:{error:'Rate limit'}}));
+ const result=await request('/lookup?address='+root);
+ assert.equal(result.status,503);
+ assert.match(result.json.error,/429/);
+});
