@@ -178,13 +178,16 @@ async function peerEvidence(address,connections) {
 async function investigate(address) {
   const base="/addresses/"+encodeURIComponent(address);
   const tasks={
-    account:blockscout(base),transactions:blockscout(base+"/transactions"),
-    token_transfers:blockscout(base+"/token-transfers"),internal_transactions:blockscout(base+"/internal-transactions"),
-    counters:blockscout(base+"/counters"),
-    labels:getJson(ETH_LABELS+encodeURIComponent(address),7000)
+    account:()=>blockscout(base),transactions:()=>blockscout(base+"/transactions"),
+    token_transfers:()=>blockscout(base+"/token-transfers"),internal_transactions:()=>blockscout(base+"/internal-transactions"),
+    counters:()=>blockscout(base+"/counters"),
+    labels:()=>getJson(ETH_LABELS+encodeURIComponent(address),7000)
   };
   const keys=Object.keys(tasks);
-  const outcomes=await Promise.allSettled(keys.map(k=>tasks[k]));
+  // Avoid a six-request burst against the same public indexer.
+  const first=await Promise.allSettled(keys.slice(0,2).map(k=>tasks[k]()));
+  const remaining=await Promise.allSettled(keys.slice(2).map(k=>tasks[k]()));
+  const outcomes=[...first,...remaining];
   const values={};const source_status={};const errors=[];
   keys.forEach((k,i)=>{
     const o=outcomes[i];
@@ -201,7 +204,10 @@ async function investigate(address) {
   } else source_status.rpc="not_needed";
   const effectiveAccount=usableAccount?account:rpc?{hash:address,is_contract:rpc.is_contract,coin_balance:rpc.coin_balance,nonce:rpc.outgoing_nonce}:null;
   const indexPresent=source_status.transactions==="ok"||source_status.token_transfers==="ok"||source_status.internal_transactions==="ok";
-  if(!effectiveAccount && !indexPresent)failure("Blockchain sources unavailable; no reliable result could be verified.",503);
+  if(!effectiveAccount && !indexPresent){
+   const limited=errors.some(e=>/429|rate limit/i.test(e));
+   failure(limited?"Public blockchain indexer rate limited (HTTP 429). The transaction history is temporarily unavailable.":"Blockchain sources unavailable; no reliable result could be verified.",503);
+  }
   const indexed=name=> source_status[name]==="ok"&&Array.isArray(values[name]?.items) ? values[name].items.slice(0,50):null;
   const transactions=indexed("transactions"),tokenTransfers=indexed("token_transfers"),internal=indexed("internal_transactions");
   const community=normalizeLabels(values.labels,address);
@@ -247,12 +253,21 @@ async function origin(address) {
     warning:complete?"Oldest indexed external transactions reached. ERC-20/internal/other-chain funding not included.":"PARTIAL SCAN: Earlier funding may exist. Never treat this as proven first funding."};
 }
 async function resolveEns(name) {
-  const safe=String(name||"").toLowerCase();
-  if(!/^[a-z0-9][a-z0-9-]{0,62}\.eth$/.test(safe))failure("Enter an ENS name ending in .eth",400);
-  const result=await getJson("https://bens.services.blockscout.com/api/v1/1/domains/"+encodeURIComponent(safe));
+ const safe=String(name||"").toLowerCase();
+ if(!/^[a-z0-9][a-z0-9-]{0,62}\.eth$/.test(safe))failure("Enter an ENS name ending in .eth",400);
+ try {
+  const result=await getJson("https://bens.services.blockscout.com/api/v1/1/domains/"+encodeURIComponent(safe),8000);
   const address=typeof result.resolved_address==="string"?result.resolved_address:result.resolved_address?.hash||null;
-  if(!ADDRESS.test(address||""))failure("No public Ethereum address record for this ENS name",404);
-  return {name:safe,address,source:"Blockscout ENS"};
+  if(ADDRESS.test(address||""))return {name:safe,address,source:"Blockscout ENS resolver",identity_claim:"public ENS record only"};
+ }catch(e){} // One failed public provider does not prove the ENS record is absent.
+ try{
+  const result=await getJson("https://api.enswhois.com/api/domain/"+encodeURIComponent(safe)+"/records",8000);
+  const addresses=result?.records?.addresses||{};
+  const record=addresses["60"]||addresses.ethereum||null;
+  const address=typeof record==="string"?record:record?.address||null;
+  if(ADDRESS.test(address||""))return {name:safe,address,source:"ENSWhois current resolver records",identity_claim:"public ENS record only"};
+ }catch(e){failure("ENS resolver unavailable or rate limited; retry later.",503);}
+ failure("No public Ethereum payment address currently resolved for this ENS name.",404);
 }
 
 // Cross-chain exploration: independently sourced indexer samples, not a universal wallet database.
