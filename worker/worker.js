@@ -96,6 +96,83 @@ function summarize(address,transactions) {
   }
   return [...map.values()].sort((a,b)=>b.count-a.count).slice(0,16);
 }
+
+function provenanceFromSample(address, transactions, tokens, internals) {
+ const all=[];
+ for(const tx of transactions||[]) {
+  if(tx?.to?.hash?.toLowerCase()!==address.toLowerCase() || tx?.from?.hash?.toLowerCase()===address.toLowerCase())continue;
+  if(!tx.from?.hash || !tx.timestamp || !tx.hash)continue;
+  const wei=String(tx.value||"0");if(!/^\d+$/.test(wei) || BigInt(wei)===0n)continue;
+  all.push({asset:"ETH",from:tx.from.hash,from_name:tx.from.name||tx.from.ens_domain_name||null,tx_hash:tx.hash,
+    timestamp:tx.timestamp,amount_base_units:wei,source:"Blockscout · recent external transactions",classification:"observed incoming transfer (not necessarily first funding)"});
+ }
+ for(const transfer of tokens||[]) {
+   if(transfer?.to?.hash?.toLowerCase()!==address.toLowerCase() || transfer?.from?.hash?.toLowerCase()===address.toLowerCase())continue;
+   if(!transfer?.from?.hash||!transfer.timestamp||!transfer.transaction_hash)continue;
+   all.push({asset:String(transfer.token?.symbol||"Token").slice(0,25),from:transfer.from.hash,
+    from_name:transfer.from.name||transfer.from.ens_domain_name||null,tx_hash:transfer.transaction_hash,
+    timestamp:transfer.timestamp,amount_base_units:String(transfer.total?.value||""),source:"Blockscout · recent token events",
+    classification:"observed token inbound (may not be original wallet funding)"});
+ }
+ for(const tx of internals||[]) {
+   if(tx?.to?.hash?.toLowerCase()!==address.toLowerCase() || tx?.from?.hash?.toLowerCase()===address.toLowerCase())continue;
+   if(!tx.from?.hash||!tx.timestamp||!tx.transaction_hash)continue;
+   all.push({asset:"ETH · internal",from:tx.from.hash,from_name:tx.from.name||tx.from.ens_domain_name||null,
+    tx_hash:tx.transaction_hash,timestamp:tx.timestamp,amount_base_units:String(tx.value||""),
+    source:"Blockscout · internal movements",classification:"observed internal transfer (not necessarily first funding)"});
+ }
+ all.sort((a,b)=>a.timestamp.localeCompare(b.timestamp));
+ return {earliest_in_sample:all[0]||null,first_visible_funders:[...new Map(all.filter(t=>t.from).map(t=>[t.from.toLowerCase(),t])).values()].slice(0,8),
+  events_examined:all.length,coverage:"Recent index pages only. Not a complete blockchain history. Use Trace Origin for bounded older external transaction scanning."};
+}
+function classifyEvidence(address,account,txs,tokenTransfers,internals,rawCounters,accountSource,publicLabels,sourceStatus,insights) {
+ const status=sourceStatus||{};
+ const readableCounts=rawCounters&&typeof rawCounters==="object"?{
+  external: /^\d+$/.test(String(rawCounters.transactions_count??""))?String(rawCounters.transactions_count):null,
+  tokens:/^\d+$/.test(String(rawCounters.token_transfers_count??""))?String(rawCounters.token_transfers_count):null
+ }: {external:null,tokens:null};
+ const indexed=[txs,tokenTransfers,internals].filter(Array.isArray);
+ const activity=indexed.some(a=>a.length>0);
+ const accountKnown=!!account&&typeof account.is_contract==="boolean";
+ let category=accountKnown?(account.is_contract?"Smart contract":"Externally owned address (EOA)"):"Unknown account type";
+ if(account?.is_contract && account?.name)category+=" · "+account.name;
+ let confidence="limited";
+ if(publicLabels.some(t=>t.kind==="Public explorer name tag"))confidence="public explorer tag";
+ else if(publicLabels.length)confidence="public labels (unverified)";
+ const observedOnly=!activity&&!publicLabels.length;
+ const notices=[];
+ if(observedOnly)notices.push("No indexed events or public labels were returned for this exact address. This is not evidence of a hidden owner.");
+ if(account?.coin_balance===null||account?.coin_balance===undefined)notices.push("Current ETH balance could not be independently verified.");
+ if(!accountSource)notices.push("Account source unavailable.");
+ if(status.transactions!=="ok")notices.push("External transaction history not available; do not interpret missing rows as zero activity.");
+ if(publicLabels.length)notices.push("Public labels can indicate a service or self-declared identity; they are not proof of legal ownership.");
+ let summary=observedOnly?
+  "No usable public activity or attribution found for this exact address in the consulted sample. Verify the address and chain before drawing conclusions.":
+  publicLabels.length? "Publicly labeled Ethereum address. Review the linked source and transaction counterparties before attributing control.":
+  "On-chain activity observed. Transaction counterparties and funding leads are available, but the legal owner remains unknown.";
+ return {network:"Ethereum mainnet",account_category:category,owner:"Not independently identified",attribution_level:confidence,
+  summary,activity_observed:activity,public_label_count:publicLabels.length,counts:readableCounts,
+  sample:{external:txs?.length??null,token:tokenTransfers?.length??null,internal:internals?.length??null},
+  funding_lead:insights?.earliest_in_sample||null,limitations:notices,
+  verification_links:[
+   {title:"Blockscout explorer",url:"https://eth.blockscout.com/address/"+address},
+   {title:"Etherscan explorer",url:"https://etherscan.io/address/"+address},
+   {title:"ENS lookup",url:"https://app.ens.domains/"+address},
+   {title:"Arkham Intelligence (independent search)",url:"https://intel.arkm.com/explorer/address/"+address}
+  ]};
+}
+async function peerEvidence(address,connections) {
+ const candidates=connections.slice(0,4);
+ const results=await Promise.allSettled(candidates.map(async item=>{
+   const data=await blockscout("/addresses/"+encodeURIComponent(item.address),6000);
+   const labels=tags(data);
+   return {...item,account_type: typeof data.is_contract==="boolean"?(data.is_contract?"Contract":"EOA"):"Unconfirmed",
+     public_label:labels[0]?.name||item.label||null,label_source:labels[0]?.source||item.source||null,
+     labels:labels.slice(0,3),risk_flag:data.is_scam===true||data.reputation==="scam" ? "Explorer flag — verify independently":null};
+ }));
+ return results.map((r,i)=>r.status==="fulfilled"?r.value:{...candidates[i],account_type:"Unconfirmed",public_label:candidates[i].label||null,label_source:candidates[i].source||null,labels:[],enrichment_status:"Unavailable"});
+}
+
 async function investigate(address) {
   const base="/addresses/"+encodeURIComponent(address);
   const tasks={
@@ -115,7 +192,7 @@ async function investigate(address) {
   });
   const account=values.account && typeof values.account==="object" && values.account.hash?.toLowerCase()===address.toLowerCase()?values.account:null;
   if(values.account && !account){source_status.account="invalid_response";errors.push("Blockscout address metadata could not be verified.");}
-  const usableAccount=account && (typeof account.coin_balance==="string" || typeof account.is_contract==="boolean");
+  const usableAccount=account && typeof account.coin_balance==="string" && /^\d+$/.test(account.coin_balance) && typeof account.is_contract==="boolean";
   let accountSource=usableAccount?"Blockscout":null,rpc=null;
   if(!usableAccount) {
     try {rpc=await reliableRpc(address);accountSource=rpc.provider;source_status.rpc="ok";} catch(e){source_status.rpc="unavailable";errors.push(String(e.message));}
@@ -128,10 +205,16 @@ async function investigate(address) {
   const community=normalizeLabels(values.labels,address);
   const publicTags=deduplicate([...tags(account),...community]);
   const traceStatus = !indexPresent ? "unavailable" : (transactions?.length || tokenTransfers?.length || internal?.length) ? "observed_activity" : "no_indexed_activity_in_sample";
+
+  const provenance=provenanceFromSample(address,transactions,tokenTransfers,internal);
+  const peers=summarize(address,transactions||[]);
+  const enrichedPeers=peers.length?await peerEvidence(address,peers):[];
+  const intelligence=classifyEvidence(address,effectiveAccount,transactions,tokenTransfers,internal,values.counters,
+     accountSource,publicTags,source_status,provenance);
   return {address,chain:"Ethereum Mainnet",chain_id:1,source:"NODIVRA · Blockscout + PublicNode/dRPC + eth-labels",
      checked_at:new Date().toISOString(),account:effectiveAccount,account_source:accountSource,
      transactions,token_transfers:tokenTransfers,internal_transactions:internal,counters:values.counters||null,
-     connections:summarize(address,transactions||[]),public_attributions:publicTags,
+     connections:peers,linked_entities:enrichedPeers,provenance,intelligence,public_attributions:publicTags,
      identity_status:publicTags.length?"public_labels_only":"no_public_attribution_found",
      trace_status:traceStatus,source_status,errors,
      notice:"An address is not a verified human identity. Explorer or community tags are clues with linked sources, not proof of legal ownership."};

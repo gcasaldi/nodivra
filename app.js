@@ -120,6 +120,103 @@
     target.appendChild(grid);
   }
 
+
+  let evidenceSnapshot=null;
+  function safeLink(url,title) {
+    if(typeof url!=="string" || !/^https:\/\//.test(url))return null;
+    return link(url,title);
+  }
+  function evidenceLine(parent,title,value) {
+    const line=element("div","evidence-line");
+    line.appendChild(element("span","",title));
+    line.appendChild(element("strong","",value||"Unknown"));
+    parent.appendChild(line);
+  }
+  function intelligenceBrief(data,address) {
+    const root=$("intelligence");
+    if(!root)return;
+    root.replaceChildren();root.hidden=false;
+    const insight=data.intelligence;
+    const p=data.provenance;
+    const v=document.createDocumentFragment();
+    v.appendChild(element("div","tiny-label","INTELLIGENCE BRIEF  ·  ETHEREUM MAINNET"));
+    v.appendChild(element("h3","","What can we establish about this address?"));
+    if(!insight) {
+      v.appendChild(element("p","minor","Only a basic transaction sample is available from the fallback provider. Evidence-based intelligence enrichment is unavailable."));
+      root.appendChild(v);return;
+    }
+    v.appendChild(element("p","intel-summary",insight.summary));
+    const grid=element("div","evidence-grid");
+    evidenceLine(grid,"On-chain classification",insight.account_category);
+    evidenceLine(grid,"Identified legal owner",insight.owner);
+    evidenceLine(grid,"Attribution evidence",insight.attribution_level);
+    evidenceLine(grid,"Indexed external transactions",insight.counts?.external??"Not available");
+    evidenceLine(grid,"Indexed token events",insight.counts?.tokens??"Not available");
+    evidenceLine(grid,"Earliest incoming in sample",p?.earliest_in_sample ? new Date(p.earliest_in_sample.timestamp).toLocaleString()+" · "+p.earliest_in_sample.asset : "Not observed");
+    v.appendChild(grid);
+    if(p?.first_visible_funders?.length){
+      const section=element("div","intel-subsection");
+      section.appendChild(element("h4","","Observed funding leads"));
+      section.appendChild(element("p","minor","These are incoming transfers in the returned sample, not proven first-ever funders or wallet owners."));
+      for(const item of p.first_visible_funders.slice(0,6)){
+        const entry=element("div","source-entry");
+        const meta=element("div","");
+        meta.appendChild(element("strong","",item.from_name||trimHash(item.from)));
+        meta.appendChild(element("span","",item.asset+" · "+new Date(item.timestamp).toLocaleString()));
+        entry.appendChild(meta);
+        const a=link(BLOCKSCOUT+item.from,"Trace source →");
+        a.title=item.from;a.addEventListener("click",e=>{e.preventDefault();input.value=item.from;lookup(item.from);});
+        entry.appendChild(a);section.appendChild(entry);
+      }
+      v.appendChild(section);
+    }
+    if(Array.isArray(data.linked_entities)&&data.linked_entities.length){
+      const section=element("div","intel-subsection");
+      section.appendChild(element("h4","","Direct connections · enriched public tags"));
+      section.appendChild(element("p","minor","These addresses interacted with the target. This does not establish that the same person controls them."));
+      for(const peer of data.linked_entities.slice(0,4)){
+        const row=element("div","source-entry");
+        const details=element("div","");
+        details.appendChild(element("strong","",peer.public_label||trimHash(peer.address)));
+        details.appendChild(element("span","",peer.account_type+" · "+peer.count+" interactions"+(peer.label_source?" · "+peer.label_source:"")));
+        row.appendChild(details);
+        const button=element("button","trace-button","Investigate →");
+        button.type="button";button.addEventListener("click",()=>{input.value=peer.address;lookup(peer.address);});
+        row.appendChild(button);
+        section.appendChild(row);
+      }
+      v.appendChild(section);
+    }
+    if(insight.limitations?.length){
+      const section=element("div","intel-subsection");
+      section.appendChild(element("h4","","What remains unverified"));
+      for(const note of insight.limitations.slice(0,5))section.appendChild(element("p","minor","• "+note));
+      v.appendChild(section);
+    }
+    const sources=element("div","intel-sources");
+    sources.appendChild(element("h4","","Cross-check public sources"));
+    for(const item of insight.verification_links||[]){
+      const a=safeLink(item.url,item.title+" ↗");if(a)sources.appendChild(a);
+    }
+    v.appendChild(sources);
+    root.appendChild(v);
+  }
+  function exportEvidence(){
+    if(!evidenceSnapshot){setStatus("Investigate a wallet before exporting an evidence report.",true);return;}
+    const report={title:"NODIVRA · Public intelligence brief",generated_at:new Date().toISOString(),
+      address:evidenceSnapshot.address,chain:"Ethereum mainnet",source:"Public indexers / RPC / labels",
+      intelligence:evidenceSnapshot.intelligence||null,provenance:evidenceSnapshot.provenance||null,
+      public_attributions:evidenceSnapshot.public_attributions||[],
+      linked_entities:evidenceSnapshot.linked_entities||[],
+      data_coverage:evidenceSnapshot.source_status||{},
+      note:"Read-only public intelligence. No ownership inference from transaction adjacency. Confirm critical findings using primary sources."};
+    const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
+    const temp=URL.createObjectURL(blob);
+    const anchor=document.createElement("a");anchor.href=temp;anchor.download="nodivra-evidence-"+evidenceSnapshot.address.slice(0,12)+".json";
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(temp),2000);
+  }
+
   function renderAttribution(data) {
     const target=$("attribution");
     if(!target)return;
@@ -192,6 +289,7 @@
     const controller=new AbortController();activeRequest=controller;
     button.disabled=true;button.textContent="Investigating…";
     results.hidden=true;$("origin-result").hidden=true;
+    evidenceSnapshot=null;
     let normalized=parsed.address;
     try {
       if(parsed.ens) {
@@ -214,6 +312,8 @@
       $("shown").textContent=Array.isArray(data.transactions)?String(data.transactions.length):"Unavailable";
       $("account-type").textContent=account.is_contract===true?"Contract":account.is_contract===false?"EOA (technical type)":"Unverified";
       $("coverage").textContent=provider+" · recent activity";
+      evidenceSnapshot=data;
+      intelligenceBrief(data,normalized);
       renderAttribution(data);
       renderConnections(data,normalized);
       renderTokens(data);
@@ -276,6 +376,7 @@
   form.addEventListener("submit",e=>{e.preventDefault();lookup(input.value);});
   $("example").addEventListener("click",()=>lookup("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
   originBtn.addEventListener("click",traceOrigin);
+  $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
   if(initial&&normalize(initial))lookup(initial);
   function background(){

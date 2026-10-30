@@ -37,3 +37,23 @@
 .attr-item span{color:#91a7ab}
 .attr-item a{color:var(--accent);text-decoration:underline;text-underline-offset:3px;margin-left:auto}
 @media(max-width:700px){.attr-item{display:block}.attr-item span,.attr-item a{display:block;margin-top:5px}}
+
+.intelligence{margin-top:24px;border:1px solid #2b7360;padding:24px;border-radius:13px;background:linear-gradient(130deg,#10352d,#0a1f2b);box-shadow:0 10px 40px #0003}
+.intelligence h3{font-size:23px;letter-spacing:-.03em;margin:12px 0}
+.intel-summary{color:#d7e9e3;font-size:15px;line-height:1.65;max-width:850px}
+.evidence-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:23px 0}
+.evidence-line{padding:13px 16px;border-radius:9px;border:1px solid #345950;background:#071b1cb8;display:flex;flex-direction:column;gap:3px}
+.evidence-line span{font-size:11px;color:#98b0aa;letter-spacing:.025em}
+.evidence-line strong{font-size:13px;overflow-wrap:anywhere}
+.intel-subsection{margin-top:23px;border-top:1px solid #2b534b;padding-top:15px}
+.intel-subsection h4,.intel-sources h4{font-size:14px;margin:3px 0 9px}
+.source-entry{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #29443e}
+.source-entry div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.source-entry strong{font-family:ui-monospace,Consolas,monospace;font-size:13px;overflow-wrap:anywhere}
+.source-entry span{color:#91aaa4;font-size:11px}
+.source-entry a{color:var(--accent);font-size:12px;white-space:nowrap}
+.trace-button{cursor:pointer;color:var(--accent);border:1px solid #2c6a59;background:transparent;border-radius:7px;padding:8px;white-space:nowrap;font-size:12px}
+.trace-button:hover{background:#174537}
+.intel-sources{border-top:1px solid #2a5146;margin-top:24px;padding-top:15px}
+.intel-sources a{display:inline-block;margin:5px 8px 5px 0;padding:7px 9px;border:1px solid #37735f;border-radius:6px;font-size:11px;color:var(--accent)}
+@media(max-width:700px){.evidence-grid{grid-template-columns:1fr}.intelligence{padding:16px}.source-entry{align-items:start;flex-direction:column}.source-entry a{white-space:normal}}

@@ -9,8 +9,8 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-attribution">
-  <script src="app.js?v=20261030-attribution" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261030-intelligence">
+  <script src="app.js?v=20261030-intelligence" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -43,8 +43,9 @@
             <div class="metric"><span>RECENT INDEXED TX</span><strong id="shown">—</strong></div>
             <div class="metric"><span>ACCOUNT TYPE</span><strong id="account-type">—</strong></div>
           </div>
+          <div id="intelligence" class="intelligence" hidden></div>
           <div id="attribution" class="attribution"></div>
-          <div class="result-controls"><button type="button" id="origin-button" class="button secondary">Trace earliest funding →</button><span id="coverage" class="coverage"></span></div>
+          <div class="result-controls"><button type="button" id="origin-button" class="button secondary">Trace earliest funding →</button><button type="button" id="export-evidence" class="button secondary">Export evidence JSON ↗</button><span id="coverage" class="coverage"></span></div>
           <div id="origin-result" class="origin-box" hidden></div>
           <div id="connections" class="connections" hidden></div>
           <div id="tokens" class="tokens" hidden></div>
@@ -57,9 +58,9 @@
     <section class="build wrap">
       <div class="section-head"><div><div class="eyebrow">02 / DIRECTION</div><h2>Built to ask better questions.</h2></div></div>
       <div class="cards">
-        <article class="feature"><span class="num">01</span><h3>Trace origins</h3><p>Explore where funds came from and how transfers connect across addresses.</p><span class="soon">PLANNED</span></article>
+        <article class="feature"><span class="num">01</span><h3>Trace origins</h3><p>Explore incoming funding leads and a bounded scan of older transactions.</p><span class="soon">BETA</span></article>
         <article class="feature"><span class="num">02</span><h3>See the network</h3><p>Turn long transaction histories into a graph that makes relationships easier to investigate.</p><span class="soon">PLANNED</span></article>
-        <article class="feature"><span class="num">03</span><h3>Verify attribution</h3><p>Link publicly known entities to on-chain evidence, with sources and clear uncertainty.</p><span class="soon">PLANNED</span></article>
+        <article class="feature"><span class="num">03</span><h3>Verify attribution</h3><p>Review public labels, evidence sources, and uncertainty before attributing wallets.</p><span class="soon">BETA</span></article>
       </div>
     </section>
     <section class="join wrap"><div><span class="eyebrow">03 / COLLABORATE</span><h2>Good investigations need different perspectives.</h2><p>Interested in blockchain, cybersecurity, OSINT, or visualizing complex data? I'd love to build this with you.</p></div><a class="button primary" href="https://github.com/gcasaldi/nodivra/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Get involved ↗</a></section>
