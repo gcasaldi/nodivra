@@ -726,7 +726,7 @@
       box.appendChild(element("p","case-attention","Public ENS search unavailable: "+err.message+". Try again after the provider's rate limit resets."));
       setStatus("The ENS name index is unavailable; this does not mean the name has no blockchain connections.",true);
     }finally{
-      if(activeRequest===controller){scanAllNetworks(normalized,controller);button.disabled=false;button.textContent="Search →";}
+      if(activeRequest===controller){button.disabled=false;button.textContent="Search →";}
     }
   }
 
@@ -832,7 +832,7 @@
         status.appendChild(link(ETHERSCAN+normalized,"Open Etherscan ↗"));
       }
     }finally {
-      if(activeRequest===controller){button.disabled=false;button.textContent="Search →";}
+      if(activeRequest===controller){if(ADDRESS_RE.test(normalized||""))scanAllNetworks(normalized,controller);button.disabled=false;button.textContent="Search →";}
     }
   }
   async function traceOrigin() {
