@@ -416,15 +416,183 @@ async function scanSolana(address) {
   checked_at:new Date().toISOString()};
 }
 
+
+// Evidence-limited multihop tracing: public transfers only, max 2 hops, no identity inference.
+const TRACE_LIMITS={max_depth:2,max_peers:4,max_edges:50,max_nodes:20,per_page:35};
+function traceValue(raw,decimals){
+ const rawString=String(raw??"");
+ if(!/^\d+$/.test(rawString))return null;
+ const value=BigInt(rawString),d=Number(decimals);
+ if(!Number.isInteger(d)||d<0||d>36)return {base_units:rawString,display:rawString+" base units"};
+ const base=10n**BigInt(d),f=(value%base).toString().padStart(d,"0").slice(0,8).replace(/0+$/,"");
+ return {base_units:rawString,display:(value/base).toString()+(f?"."+f:"")};
+}
+function extractEvidence(root,txs,tokens,network,direction){
+ const result=[],lookup=root.toLowerCase(),seen=new Set();
+ const accept=(from,to)=> direction==="in"?to===lookup : direction==="out"?from===lookup : from===lookup||to===lookup;
+ const add=(item)=>{
+  if(!ADDRESS.test(item.from)||!ADDRESS.test(item.to)||item.from.toLowerCase()===item.to.toLowerCase())return;
+  if(!accept(item.from.toLowerCase(),item.to.toLowerCase()))return;
+  if(item.value_base_units==="0")return;
+  const key=[item.tx_hash,item.from.toLowerCase(),item.to.toLowerCase(),item.asset_contract||"native",item.event_index??"native"].join("|");
+  if(seen.has(key))return;seen.add(key);result.push(item);
+ };
+ for(const tx of txs||[]){
+  if(!ADDRESS.test(tx?.from?.hash||"")||!ADDRESS.test(tx?.to?.hash||"")||!/^0x[a-fA-F0-9]{64}$/.test(tx?.hash||""))continue;
+  if(tx.status==="error"||tx.status==="failed")continue;
+  const val=traceValue(tx.value,18);
+  if(!val)continue;
+  add({from:tx.from.hash,to:tx.to.hash,from_name:tx.from.name||tx.from.ens_domain_name||null,
+    to_name:tx.to.name||tx.to.ens_domain_name||null,tx_hash:tx.hash,timestamp:tx.timestamp||null,
+    block:tx.block??null,asset:network.symbol,asset_contract:null,value_base_units:val.base_units,amount:val.display,
+    kind:"native",event_index:null,source_url:network.explorer+"/tx/"+tx.hash});
+ }
+ for(const tr of tokens||[]){
+  if(!ADDRESS.test(tr?.from?.hash||"")||!ADDRESS.test(tr?.to?.hash||"")||!/^0x[a-fA-F0-9]{64}$/.test(tr?.transaction_hash||""))continue;
+  const token=tr.token||{}, raw=tr.total?.value??tr.value;
+  const amount=traceValue(raw,token.decimals);
+  if(!amount)continue;
+  const contract=token.address_hash||token.address||null;
+  add({from:tr.from.hash,to:tr.to.hash,from_name:tr.from.name||null,to_name:tr.to.name||null,
+    tx_hash:tr.transaction_hash,timestamp:tr.timestamp||null,block:tr.block_number??null,
+    asset:String(token.symbol||"Token").slice(0,25),asset_contract:ADDRESS.test(contract||"")?contract:null,
+    value_base_units:amount.base_units,amount:amount.display,kind:"token",
+    event_index:tr.log_index??tr.index??null,source_url:network.explorer+"/tx/"+tr.transaction_hash});
+ }
+ return result.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||""))).slice(0,TRACE_LIMITS.per_page);
+}
+async function tracePage(address,network,direction){
+ const base=network.explorer+"/api/v2/addresses/"+encodeURIComponent(address);
+ const filter=direction==="in"?"?filter=to":direction==="out"?"?filter=from":"";
+ const outcomes=await Promise.allSettled([
+  networkRequest("",base+"/transactions"+filter,6800),
+  networkRequest("",base+"/token-transfers"+filter,6800)
+ ]);
+ const native=outcomes[0].status==="fulfilled"&&Array.isArray(outcomes[0].value?.items)?outcomes[0].value.items:null;
+ const tokens=outcomes[1].status==="fulfilled"&&Array.isArray(outcomes[1].value?.items)?outcomes[1].value.items:null;
+ const status={native:native===null?"unavailable":"ok",token:tokens===null?"unavailable":"ok"};
+ return {edges:extractEvidence(address,native,tokens,network,direction),status};
+}
+function traceNode(address,hop,viaTx){
+ return {address,hop,via_transaction:viaTx||null,entity_type:"unknown",labels:[],owner_status:"unknown",
+  note:"Observed transfer endpoint, not a verified owner."};
+}
+function evidenceLabel(name,category,source,url){
+ return {name:String(name).slice(0,100),category,source,source_url:url,confidence:"public_label_only"};
+}
+async function traceEnrich(node,network){
+ const url=network.explorer+"/address/"+node.address;
+ try{
+  const raw=await networkRequest(network.explorer+"/api/v2","/addresses/"+encodeURIComponent(node.address),6800);
+  if(raw&&raw.hash?.toLowerCase()===node.address.toLowerCase()){
+   node.entity_type=raw.is_contract===true?"smart_contract":raw.is_contract===false?"EOA":"unknown";
+   if(raw.name)node.labels.push(evidenceLabel(raw.name,"Explorer tag","Blockscout",url));
+   if(raw.ens_domain_name)node.labels.push(evidenceLabel(raw.ens_domain_name,"ENS reverse record","Blockscout",url));
+   if(Array.isArray(raw.public_tags))for(const tag of raw.public_tags.slice(0,5)){
+     const label=tag?.label||tag?.name||tag?.display_name;
+     if(label)node.labels.push(evidenceLabel(label,"Public classification","Blockscout",url));
+   }
+   if(raw.is_scam===true)node.labels.push(evidenceLabel("Explorer warning flag","Risk label (not proof)","Blockscout",url));
+  }
+ }catch(e){node.note+=" Public explorer enrichment unavailable.";}
+ if(network.id==="ethereum") {
+  try{
+   const rows=await getJson(ETH_LABELS+encodeURIComponent(node.address),5000);
+   for(const label of normalizeLabels(rows,node.address).slice(0,4))
+     node.labels.push(evidenceLabel(label.name,label.kind,"eth-labels",label.source_url));
+  }catch(e){} // Optional community dataset: absence does not imply no label elsewhere.
+ }
+ const seen=new Set();
+ node.labels=node.labels.filter(l=>{const k=l.source+"|"+l.name.toLowerCase();if(seen.has(k))return false;seen.add(k);return true;}).slice(0,7);
+ node.owner_status=node.labels.length?"public_tags_only":"not_identified";
+ return node;
+}
+async function investigateFlows(address,options) {
+ const chain=NETWORKS.find(n=>n.id===options.network)||NETWORKS[0];
+ const direction=["in","out","both"].includes(options.direction)?options.direction:"in";
+ const depth=Math.max(1,Math.min(TRACE_LIMITS.max_depth,Number(options.depth)||2));
+ const nodes=new Map([[address.toLowerCase(),traceNode(address,0,null)]]);
+ const seen=new Set(); const edges=[],problems=[];
+ function pushEvidence(item,hop,discoveredFrom){
+  const key=[item.tx_hash,item.from.toLowerCase(),item.to.toLowerCase(),item.kind,item.event_index??"",item.asset_contract||""].join("|");
+  if(seen.has(key)||edges.length>=TRACE_LIMITS.max_edges)return;
+  seen.add(key);
+  const fromKey=item.from.toLowerCase(),toKey=item.to.toLowerCase();
+  for(const keyOf of [fromKey,toKey])if(!nodes.has(keyOf)&&nodes.size<TRACE_LIMITS.max_nodes){
+    const name=keyOf===fromKey?item.from_name:item.to_name;
+    const newNode=traceNode(keyOf===fromKey?item.from:item.to,hop,item.tx_hash);
+    if(name)newNode.labels.push(evidenceLabel(name,"Transaction index label","Blockscout",chain.explorer+"/address/"+newNode.address));
+    nodes.set(keyOf,newNode);
+  }
+  if(!nodes.has(fromKey)||!nodes.has(toKey))return;
+  edges.push({...item,hop,observed_via:discoveredFrom,evidence_type:"on_chain_indexed_transfer"});
+ }
+ const root=await tracePage(address,chain,direction);
+ if(root.status.native!=="ok" && root.status.token!=="ok")
+  failure("The public transaction and token index are both unavailable. No trace can be verified.",503);
+ for(const e of root.edges.slice(0,24))pushEvidence(e,1,address);
+ const rootPeers=edges.map(e=>e.from.toLowerCase()===address.toLowerCase()?e.to:e.from);
+ const peerCount=new Map();
+ for(const peer of rootPeers)if(peer.toLowerCase()!==address.toLowerCase())peerCount.set(peer.toLowerCase(),(peerCount.get(peer.toLowerCase())||0)+1);
+ const candidates=[...peerCount].sort((a,b)=>b[1]-a[1]).slice(0,TRACE_LIMITS.max_peers).map(([a])=>a);
+ const expanded=[];
+ if(depth===2&&candidates.length) {
+  const results=await Promise.allSettled(candidates.map(peer=>tracePage(peer,chain,direction)));
+  for(let i=0;i<results.length;i++){
+    const item=results[i],peer=candidates[i];
+    if(item.status!=="fulfilled"){problems.push("Second-hop query failed for "+peer);continue;}
+    const p=item.value; expanded.push({address:peer,...p.status});
+    if(p.status.native!=="ok"&&p.status.token!=="ok")continue;
+    // Only expand the directly connected peer once. Loops can exist but do not imply shared control.
+    let included=0;
+    for(const edge of p.edges){
+      const other=edge.from.toLowerCase()===peer?edge.to.toLowerCase():edge.from.toLowerCase();
+      if(other===address.toLowerCase()||other===peer||nodes.has(other))continue;
+      if(included>=3||edges.length>=TRACE_LIMITS.max_edges||nodes.size>=TRACE_LIMITS.max_nodes)break;
+      pushEvidence(edge,2,peer);included++;
+    }
+  }
+ }
+ // Enrich just the subject and first-hop peers; avoid uncontrolled OSINT API fanout.
+ const primary=[address.toLowerCase(),...candidates].filter((v,i,a)=>a.indexOf(v)===i);
+ await Promise.allSettled(primary.map(id=>traceEnrich(nodes.get(id),chain)));
+ const finalNodes=[...nodes.values()];
+ const sources=[{name:"Blockscout public indexed transfers",url:chain.explorer+"/address/"+address,
+   kind:"primary on-chain observation",method:"API v2 address transactions and token transfers"},
+  {name:"Independent transaction cross-check",url:"https://etherscan.io/address/"+address,
+   kind:chain.id==="ethereum"?"independent explorer":"External index (Ethereum only; do not use for other networks)"},
+  {name:"Public intelligence tags",url:chain.explorer+"/address/"+address,kind:"explorer and opt-in names"}];
+ const attributed=finalNodes.filter(n=>n.labels?.length);
+ const flags=finalNodes.filter(n=>n.labels?.some(l=>l.category?.startsWith("Risk")));
+ return {version:"0.1-beta",address,network:chain.name,chain_id:chain.chain_id,asset:chain.symbol,
+  queried_at:new Date().toISOString(),mode:{direction,depth_requested:depth,depth_achieved:edges.some(e=>e.hop===2)?2:edges.length?1:0},
+  graph:{nodes:finalNodes,edges},stats:{nodes:finalNodes.length,transfers:edges.length,entities_with_public_labels:attributed.length,
+   risk_flags_reported_by_explorer:flags.length,expanded_peers:expanded.length},
+  coverage:{root:root.status,expanded,problems,has_observed_transfers:edges.length>0,limit:TRACE_LIMITS,
+   sample:"At most one recent API page per visited address. Depth 2; max four first-hop peers and three second-hop links each. Token and native transfers are distinct evidence types."},
+  osint:{public_labels:attributed.map(n=>({address:n.address,labels:n.labels})),sources},
+  conclusions:[
+   edges.length?"Recent on-chain transfer relationships were observed; follow the linked transaction hashes for verification.":"No qualifying transfers observed in the returned sample. This does not prove that the address has no history.",
+   attributed.length?"Some nodes have public explorer, ENS or community labels; none proves the legal owner.":"No public attributed entities were confirmed in the enriched nodes.",
+   "A chain of transfers is not proof of common wallet ownership or criminal involvement."
+  ],
+  identity_status:"No legal identity inferred; any public labels must be verified independently.",
+  limitations:["This is a bounded sample, not a complete historical multi-chain financial flow reconstruction.",
+   "Contracts, exchange hot wallets, bridges, token swaps, internal calls and mixers can break naive transfer-chain assumptions.",
+   "Source labels are public claims, not legal identities. No private KYC data is accessed.",
+   "No person-level identification, geolocation or guilt conclusions are generated."]};
+}
+
 export default {
  async fetch(request) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
   if(request.method!=="GET")return reply(request,{error:"Read-only API"},405);
   const u=new URL(request.url),path=u.pathname;
   if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
-  if(!["/lookup","/origin","/resolve","/multichain"].includes(path))return reply(request,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve","/multichain","/investigate"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/resolve")return reply(request,await resolveEns(u.searchParams.get("name")));
+   if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return reply(request,await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}
    if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return reply(request,await scanEvm(address));if(BTC.test(address))return reply(request,await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return reply(request,await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
    const address=u.searchParams.get("address")||"";
    if(!ADDRESS.test(address))failure("Provide exactly 40 hexadecimal digits after 0x",400);

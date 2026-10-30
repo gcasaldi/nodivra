@@ -9,7 +9,7 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-multichain-solana">
+  <link rel="stylesheet" href="styles.css?v=20261030-investigation">
   <script src="app.js?v=20261030-multichain" defer></script>
 </head>
 <body>
@@ -47,6 +47,19 @@
           <div id="intelligence" class="intelligence" hidden></div>
           <div id="attribution" class="attribution"></div>
           <div class="result-controls"><button type="button" id="origin-button" class="button secondary">Trace earliest funding →</button><button type="button" id="export-evidence" class="button secondary">Export evidence JSON ↗</button><span id="coverage" class="coverage"></span></div>
+          <section class="investigation-panel" aria-label="Attribution and investigation engine">
+            <div class="tiny-label">NODIVRA / ATTRIBUTION &amp; INVESTIGATION ENGINE · BETA</div>
+            <h3>Trace the money. Verify the links.</h3>
+            <p class="minor">Explore recent on-chain flows up to two hops. Every connection includes a transaction source. Public tags are leads, not proof of ownership.</p>
+            <div class="trace-controls">
+              <label for="trace-network">Chain<select id="trace-network"><option value="ethereum">Ethereum</option><option value="base">Base</option><option value="arbitrum">Arbitrum One</option><option value="optimism">OP Mainnet</option><option value="polygon">Polygon PoS</option></select></label>
+              <label for="trace-direction">Direction<select id="trace-direction"><option value="in">Incoming / origin</option><option value="out">Outgoing / destination</option><option value="both">Both directions</option></select></label>
+              <label for="trace-depth">Depth<select id="trace-depth"><option value="2">2 hops</option><option value="1">1 hop</option></select></label>
+              <button id="trace-button" type="button" class="button primary">Run investigation ↗</button>
+            </div>
+            <div id="trace-state" role="status" aria-live="polite" class="minor">Run an investigation to build an evidence-backed flow graph.</div>
+            <div id="trace-output" hidden></div>
+          </section>
           <div id="origin-result" class="origin-box" hidden></div>
           <div id="connections" class="connections" hidden></div>
           <div id="tokens" class="tokens" hidden></div>

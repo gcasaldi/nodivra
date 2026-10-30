@@ -217,6 +217,101 @@
     setTimeout(()=>URL.revokeObjectURL(temp),2000);
   }
 
+
+  let flowEvidence=null;
+  function traceText(parent,text,style="minor"){parent.appendChild(element("p",style,text));}
+  function graphAddress(address){return "https://eth.blockscout.com/address/"+encodeURIComponent(address);}
+  function renderFlowGraph(report) {
+    const root=$("trace-output");root.replaceChildren();root.hidden=false;
+    const top=element("div","trace-summary");
+    top.appendChild(element("div","tiny-label","EVIDENCE GRAPH · "+report.network.toUpperCase()+" · "+report.mode.direction.toUpperCase()));
+    top.appendChild(element("h4","",report.stats.transfers+" observed transfers · "+report.stats.nodes+" connected addresses"));
+    traceText(top,"Depth reached: "+report.mode.depth_achieved+" of "+report.mode.depth_requested+" hops · Publicly labelled nodes: "+report.stats.entities_with_public_labels);
+    root.appendChild(top);
+    const nodes=new Map((report.graph.nodes||[]).map(n=>[n.address.toLowerCase(),n]));
+    const graph=element("div","flow-rows");
+    for(const hop of [1,2]){
+      const group=(report.graph.edges||[]).filter(e=>e.hop===hop);
+      if(!group.length)continue;
+      const section=element("div","flow-section");
+      section.appendChild(element("h4","","Hop "+hop+" · "+group.length+" indexed transfers"));
+      for(const edge of group.slice(0,35)){
+        const row=element("div","flow-edge");
+        const title=element("div","flow-path");
+        const from=nodes.get(edge.from.toLowerCase()),to=nodes.get(edge.to.toLowerCase());
+        const name=(n,id)=>n?.labels?.[0]?.name||id.slice(0,8)+"…"+id.slice(-6);
+        title.appendChild(element("span","",name(from,edge.from)));
+        title.appendChild(element("span","flow-arrow","→"));
+        title.appendChild(element("span","",name(to,edge.to)));
+        row.appendChild(title);
+        const details=element("div","flow-meta");
+        details.appendChild(element("span","",edge.amount+" "+edge.asset+(edge.kind==="token"?" (token)":"")));
+        details.appendChild(element("span","",edge.timestamp?new Date(edge.timestamp).toLocaleString():"time unknown"));
+        if(edge.source_url?.startsWith("https://"))details.appendChild(link(edge.source_url,"Transaction evidence ↗"));
+        row.appendChild(details);
+        section.appendChild(row);
+      }
+      graph.appendChild(section);
+    }
+    if(!report.graph.edges?.length)traceText(graph,"No qualifying transfers were found in the returned sample. Check the address, choose another direction, or inspect the explorer.", "trace-empty");
+    root.appendChild(graph);
+    const tags=report.osint?.public_labels||[];
+    const tagsBox=element("div","trace-osint");
+    tagsBox.appendChild(element("h4","","Open-source attribution leads"));
+    if(!tags.length)traceText(tagsBox,"No public labels found for the enriched nodes. Owner identity remains unknown.");
+    for(const item of tags.slice(0,12)){
+      const line=element("div","source-entry");
+      line.appendChild(element("span","",item.address.slice(0,12)+"…"));
+      const labels=element("div","");
+      for(const t of item.labels.slice(0,5)){
+        labels.appendChild(element("strong","",t.name+" · "+t.category));
+        if(t.source_url?.startsWith("https://"))labels.appendChild(link(t.source_url,"Source: "+t.source+" ↗"));
+      }
+      line.appendChild(labels);tagsBox.appendChild(line);
+    }
+    root.appendChild(tagsBox);
+    const limits=element("div","trace-limitations");
+    limits.appendChild(element("h4","","Investigation limits and source coverage"));
+    traceText(limits,report.coverage.sample);
+    for(const note of report.limitations.slice(0,4))traceText(limits,"• "+note);
+    for(const error of report.coverage.problems.slice(0,5))traceText(limits,"Provider note: "+error);
+    root.appendChild(limits);
+    const exports=element("div","trace-export");
+    const exportBtn=element("button","button secondary","Export investigation dossier (JSON) ↗");
+    exportBtn.type="button";exportBtn.addEventListener("click",()=>downloadInvestigation());
+    exports.appendChild(exportBtn);root.appendChild(exports);
+  }
+  function downloadInvestigation(){
+    if(!flowEvidence){$("trace-state").textContent="Run an investigation first.";return;}
+    const content=JSON.stringify({report_type:"NODIVRA investigation dossier",generated_at:new Date().toISOString(),
+      ...flowEvidence,disclaimer:"Public on-chain evidence and openly documented labels only. Transfer links do not identify people or establish guilt."},null,2);
+    const blob=new Blob([content],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const anchor=document.createElement("a");
+    anchor.href=url;anchor.download="nodivra-investigation-"+flowEvidence.network.toLowerCase()+"-"+flowEvidence.address.slice(0,12)+".json";
+    document.body.appendChild(anchor);anchor.click();anchor.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }
+  async function runInvestigation(){
+    const address=activeAddress;
+    const state=$("trace-state"),button=$("trace-button"),output=$("trace-output");
+    if(!ADDRESS_RE.test(address)){
+      state.textContent="Enter an Ethereum-format (0x...) wallet address first. Bitcoin and Solana tracing need different flow models.";return;
+    }
+    flowEvidence=null;output.hidden=true;output.replaceChildren();
+    button.disabled=true;button.textContent="Tracing…";
+    state.textContent="Querying public transfers, tracing counterparties and checking available public labels…";
+    const network=$("trace-network").value,direction=$("trace-direction").value,depth=$("trace-depth").value;
+    try {
+      const query=new URLSearchParams({address,network,direction,depth});
+      const report=await fetchJson(API+"/investigate?"+query.toString(),null,40000);
+      if(address!==activeAddress){state.textContent="Wallet changed; old investigation discarded.";return;}
+      flowEvidence=report;renderFlowGraph(report);
+      state.textContent="Evidence graph created from indexed transactions. Open the linked source before relying on any attribution.";
+    }catch(e){state.textContent="Investigation unavailable: "+e.message+". This is not evidence of an empty wallet.";}
+    finally{button.disabled=false;button.textContent="Run investigation ↗";}
+  }
+
   function renderAttribution(data) {
     const target=$("attribution");
     if(!target)return;
@@ -369,6 +464,9 @@
     button.disabled=true;button.textContent="Investigating…";
     results.hidden=true;$("origin-result").hidden=true;
     evidenceSnapshot=null;
+    flowEvidence=null;
+    $("trace-output").hidden=true;
+    $("trace-state").textContent="Run an investigation to build an evidence-backed flow graph.";
     let normalized=parsed.address;
     try {
       if(parsed.ens) {
@@ -456,6 +554,7 @@
   form.addEventListener("submit",e=>{e.preventDefault();lookup(input.value);});
   $("example").addEventListener("click",()=>lookup("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
   originBtn.addEventListener("click",traceOrigin);
+  $("trace-button").addEventListener("click",runInvestigation);
   $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
   if(initial&&(normalize(initial)||isBitcoin(initial)||isSolana(initial)))lookup(initial);

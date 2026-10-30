@@ -72,3 +72,27 @@
 .chain-card a{color:var(--accent);font-size:12px;display:inline-block;margin-top:12px}
 .chain-notes{margin-top:18px}
 @media(max-width:650px){.chain-grid{grid-template-columns:1fr}.chain-results{padding:15px}}
+
+.investigation-panel{margin-top:26px;padding:24px;border:1px solid #28765e;border-radius:14px;background:linear-gradient(135deg,#0d322b,#0b1b25)}
+.investigation-panel h3{font-size:21px;letter-spacing:-.035em;margin:11px 0}
+.trace-controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end;margin:18px 0}
+.trace-controls label{display:flex;flex-direction:column;gap:5px;color:#b5d5ce;font-size:12px;margin:0}
+.trace-controls select{padding:10px 12px;min-width:130px;background:#091a22;color:#e5f4f0;border:1px solid #31574c;border-radius:8px;cursor:pointer}
+.trace-controls .button{padding:10px 15px;font-size:13px}
+#trace-state{margin:14px 0}
+.trace-summary{border-top:1px solid #325e52;padding-top:19px;margin-top:18px}
+.trace-summary h4{font-size:18px;margin:9px 0}
+.flow-section{padding:13px 0}
+.flow-section h4,.trace-osint h4,.trace-limitations h4{margin:12px 0;font-size:15px}
+.flow-edge{background:#061a20;border:1px solid #284e49;border-radius:9px;padding:12px 15px;margin:9px 0}
+.flow-path{display:flex;flex-wrap:wrap;gap:9px;align-items:center;color:#d9f2e9;font-size:12px;overflow-wrap:anywhere}
+.flow-arrow{font-size:17px;color:#70f9c5}
+.flow-meta{display:flex;flex-wrap:wrap;gap:15px;margin-top:8px;font-size:11px;color:#8eaaa5}
+.flow-meta a,.trace-osint a{color:var(--accent)}
+.trace-osint,.trace-limitations{border-top:1px solid #2f574b;margin-top:18px;padding-top:13px}
+.trace-osint .source-entry span{overflow-wrap:anywhere}
+.trace-osint .source-entry div{display:flex;flex-wrap:wrap;gap:8px;justify-content:start}
+.trace-osint a{font-size:11px;display:inline-block}
+.trace-empty{color:#d8bf91;font-size:13px}
+.trace-export{padding-top:18px}
+@media(max-width:650px){.investigation-panel{padding:16px}.trace-controls{display:grid;grid-template-columns:1fr 1fr}.trace-controls .button{grid-column:1/-1}.trace-controls select{width:100%;min-width:0}.flow-meta{gap:8px}}
