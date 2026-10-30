@@ -252,15 +252,125 @@ async function resolveEns(name) {
   if(!ADDRESS.test(address||""))failure("No public Ethereum address record for this ENS name",404);
   return {name:safe,address,source:"Blockscout ENS"};
 }
+
+// Cross-chain exploration: independently sourced indexer samples, not a universal wallet database.
+const NETWORKS = [
+ {id:"ethereum",name:"Ethereum",symbol:"ETH",explorer:"https://eth.blockscout.com",chain_id:1},
+ {id:"base",name:"Base",symbol:"ETH",explorer:"https://base.blockscout.com",chain_id:8453},
+ {id:"arbitrum",name:"Arbitrum One",symbol:"ETH",explorer:"https://arbitrum.blockscout.com",chain_id:42161},
+ {id:"optimism",name:"OP Mainnet",symbol:"ETH",explorer:"https://optimism.blockscout.com",chain_id:10},
+ {id:"polygon",name:"Polygon PoS",symbol:"POL",explorer:"https://polygon.blockscout.com",chain_id:137}
+];
+const BTC = /^(?:bc1[ac-hj-np-z02-9]{11,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/;
+async function networkRequest(base,path,ms=8000) {
+ const c=new AbortController();const timer=setTimeout(()=>c.abort(),ms);
+ try {
+  const res=await fetch(base+path,{signal:c.signal,headers:{"Accept":"application/json"},cf:{cacheTtl:55,cacheEverything:true}});
+  if(res.status===404)return {missing:true};
+  if(!res.ok)throw Error("HTTP "+res.status);
+  return await res.json();
+ }finally{clearTimeout(timer);}
+}
+function normalizeAsset(row) {
+ const token=row?.token||{};
+ const decimals=Number(token.decimals);
+ const value=String(row?.value||"0");
+ const valid=/^\d+$/.test(value)&&Number.isInteger(decimals)&&decimals>=0&&decimals<=36;
+ if(!valid)return null;
+ if(BigInt(value)===0n)return null;
+ const scale=10n**BigInt(decimals);
+ const raw=BigInt(value);
+ const whole=raw/scale, frac=(raw%scale).toString().padStart(decimals,"0").slice(0,6).replace(/0+$/,"");
+ return {symbol:String(token.symbol||"TOKEN").slice(0,20),name:String(token.name||"Unverified token").slice(0,80),
+  contract:String(token.address_hash||"").slice(0,44),type:String(token.type||"ERC-20"),
+  amount:whole.toString()+(frac?"."+frac:""),source:"Blockscout indexed token balance",
+  note:"Token metadata is unverified; spam tokens and misleading symbols are possible."};
+}
+async function scanEvmNetwork(network,address) {
+ const base=network.explorer+"/api/v2",uri="/addresses/"+encodeURIComponent(address);
+ const answer={id:network.id,name:network.name,chain_id:network.chain_id,symbol:network.symbol,
+   explorer_url:network.explorer+"/address/"+address,status:"unavailable",native_balance_wei:null,
+   native_balance:null,assets:[],transaction_count:null,recent_transactions:[],
+   public_labels:[],account_type:"Unknown",checks:{account:"unavailable",tokens:"unavailable",transactions:"unavailable"},warnings:[]};
+ let account=null;
+ try{
+   const data=await networkRequest(base,uri);
+   if(data.missing){answer.status="not_indexed";answer.checks.account="not_indexed";answer.warnings.push("No public address record returned by this indexer; activity elsewhere is not excluded.");return answer;}
+   if(data&&typeof data==="object" && data.hash?.toLowerCase()===address.toLowerCase()){account=data;answer.checks.account="ok";}
+   else {answer.warnings.push("Explorer account response did not match the queried address.");return answer;}
+ }catch(e){answer.warnings.push("Account lookup unavailable: "+String(e.message).slice(0,100));return answer;}
+ if(typeof account.coin_balance==="string" && /^\d+$/.test(account.coin_balance)){
+  answer.native_balance_wei=account.coin_balance;
+  const x=BigInt(account.coin_balance),whole=x/1000000000000000000n;
+  const frac=(x%1000000000000000000n).toString().padStart(18,"0").slice(0,6).replace(/0+$/,"");
+  answer.native_balance=whole.toString()+(frac?"."+frac:"");
+ }
+ if(typeof account.is_contract==="boolean")answer.account_type=account.is_contract?"Smart contract":"EOA";
+ if(account.name)answer.public_labels.push({label:String(account.name),type:"Explorer name tag",source:network.explorer+"/address/"+address});
+ if(account.ens_domain_name)answer.public_labels.push({label:String(account.ens_domain_name),type:"ENS name",source:network.explorer+"/address/"+address});
+ const [tokenResponse,txResponse]=await Promise.allSettled([
+  networkRequest(base,uri+"/token-balances",7500),networkRequest(base,uri+"/transactions",7500)
+ ]);
+ if(tokenResponse.status==="fulfilled"){
+  const raw=tokenResponse.value;
+  if(Array.isArray(raw)){answer.checks.tokens="ok";answer.assets=raw.map(normalizeAsset).filter(Boolean).slice(0,15);}
+  else{answer.warnings.push("Token balances not available in the expected format.");}
+ }else answer.warnings.push("Token balances temporarily unavailable.");
+ if(txResponse.status==="fulfilled"&&Array.isArray(txResponse.value.items)){
+  answer.checks.transactions="ok";
+  answer.recent_transactions=txResponse.value.items.slice(0,8).map(tx=>({hash:tx.hash,from:tx.from?.hash||null,to:tx.to?.hash||null,timestamp:tx.timestamp||null,value_wei:String(tx.value||"0"),source:network.explorer+"/tx/"+tx.hash}));
+ }else answer.warnings.push("Recent transactions unavailable from this indexer.");
+ const hasActivity=BigInt(answer.native_balance_wei||"0")>0n||answer.assets.length>0||answer.recent_transactions.length>0;
+ answer.status=hasActivity?"activity_observed":"indexed_no_sample_activity";
+ return answer;
+}
+async function scanEvm(address) {
+ const results=await Promise.allSettled(NETWORKS.map(n=>scanEvmNetwork(n,address)));
+ const networks=results.map((r,i)=>r.status==="fulfilled"?r.value:({id:NETWORKS[i].id,name:NETWORKS[i].name,
+  symbol:NETWORKS[i].symbol,explorer_url:NETWORKS[i].explorer+"/address/"+address,status:"unavailable",
+  assets:[],native_balance:null,transaction_count:null,recent_transactions:[],public_labels:[],warnings:[String(r.reason?.message||"Service unavailable")]}));
+ const observed=networks.filter(n=>n.status==="activity_observed").map(n=>n.name);
+ const tagged=networks.flatMap(n=>(n.public_labels||[]).map(tag=>({...tag,network:n.name})));
+ const checked=networks.filter(n=>n.checks?.account==="ok").length;
+ return {address,format:"evm",network_scope:NETWORKS.map(n=>n.name),networks,
+  discovery:{active_networks_observed:observed,labels:tagged,checked_networks:checked,total_networks:NETWORKS.length,
+   summary:observed.length?"Observed assets or transfers on "+observed.join(", ")+".":"No activity detected in the indexed samples on the networks that responded. Verify the address before inferring inactivity.",
+   goal:"Follow documented transfers and labels; this is not proof that one person controls every activity."},
+  limitations:"This scans five supported EVM networks, not all blockchains. An EVM address is valid on multiple networks without a registration event. Native and token quantities are not an aggregate USD portfolio. Public API coverage may be incomplete.",
+  checked_at:new Date().toISOString()};
+}
+async function scanBitcoin(address) {
+ const root="https://mempool.space/api/address/"+encodeURIComponent(address);
+ const [info,txs]=await Promise.allSettled([networkRequest("",root,10000),networkRequest("",root+"/txs",10000)]);
+ if(info.status!=="fulfilled" || !info.value?.chain_stats)failure("Bitcoin indexer unavailable or address not recognized.",502);
+ const chain=info.value.chain_stats,mempool=info.value.mempool_stats||{};
+ const balance=BigInt(chain.funded_txo_sum||0)-BigInt(chain.spent_txo_sum||0)+BigInt(mempool.funded_txo_sum||0)-BigInt(mempool.spent_txo_sum||0);
+ const txList=txs.status==="fulfilled"&&Array.isArray(txs.value)?txs.value:[];
+ const recent=txList.slice(0,8).map(tx=>({hash:tx.txid,timestamp:tx.status?.block_time?new Date(tx.status.block_time*1000).toISOString():null,
+   source:"https://mempool.space/tx/"+tx.txid,status:tx.status?.confirmed?"confirmed":"unconfirmed"}));
+ return {address,format:"bitcoin",network_scope:["Bitcoin mainnet"],networks:[{
+ id:"bitcoin",name:"Bitcoin",symbol:"BTC",explorer_url:"https://mempool.space/address/"+encodeURIComponent(address),
+ status: Number(chain.tx_count||0)>0?"activity_observed":"indexed_no_sample_activity",
+ native_balance_sats:balance.toString(),native_balance:(Number(balance)/1e8).toFixed(8),
+ transaction_count:Number(chain.tx_count||0),recent_transactions:recent,assets:[],public_labels:[],
+ warnings:["An address is not a person. Bitcoin funds belong to transaction outputs; one transaction can have multiple inputs and outputs."],
+ checks:{account:"ok",transactions:txs.status==="fulfilled"?"ok":"unavailable",tokens:"not_applicable"}
+ }],discovery:{active_networks_observed:chain.tx_count?["Bitcoin"]:[],labels:[],checked_networks:1,total_networks:1,
+ summary:chain.tx_count?"Bitcoin transaction activity found. Explore the public transaction history to investigate spending and funding.":"No confirmed Bitcoin transactions indexed for this address.",
+ goal:"Transaction-level Bitcoin analysis; no identity inference from transaction inputs alone."},
+ limitations:"Bitcoin address search does not identify a whole wallet or all addresses derived from the same keys. Token balances and cross-chain identity cannot be inferred.",checked_at:new Date().toISOString()};
+}
+
 export default {
  async fetch(request) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
   if(request.method!=="GET")return reply(request,{error:"Read-only API"},405);
   const u=new URL(request.url),path=u.pathname;
   if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
-  if(!["/lookup","/origin","/resolve"].includes(path))return reply(request,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve","/multichain"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/resolve")return reply(request,await resolveEns(u.searchParams.get("name")));
+   if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return reply(request,await scanEvm(address));if(BTC.test(address))return reply(request,await scanBitcoin(address));failure("Enter a valid EVM (0x...) or Bitcoin mainnet address.",400);}
    const address=u.searchParams.get("address")||"";
    if(!ADDRESS.test(address))failure("Provide exactly 40 hexadecimal digits after 0x",400);
    return reply(request,path==="/origin"?await origin(address):await investigate(address));

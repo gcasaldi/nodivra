@@ -278,9 +278,86 @@
   function setUrl(address) {
     try {const url=new URL(location.href);url.searchParams.set("address",address);history.replaceState(null,"",url);}catch(_){}
   }
+
+  const BTC_ADDRESS_RE = /^(?:bc1[ac-hj-np-z02-9]{11,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/;
+  function isBitcoin(value){return BTC_ADDRESS_RE.test(String(value||"").trim());}
+  function chainResult(data) {
+    const root=$("chain-results");root.replaceChildren();root.hidden=false;
+    if(!data || !Array.isArray(data.networks)){root.appendChild(element("p","minor","Cross-chain evidence is unavailable."));return;}
+    const head=element("div","chain-header");
+    head.appendChild(element("div","tiny-label","NODIVRA · CROSS-CHAIN DISCOVERY"));
+    head.appendChild(element("h3","","Where does this address appear?"));
+    head.appendChild(element("p","minor",data.discovery?.summary||"Network coverage available below."));
+    root.appendChild(head);
+    const n=element("div","chain-grid");
+    for(const network of data.networks){
+      const card=element("article","chain-card");
+      const top=element("div","chain-card-head");
+      top.appendChild(element("strong","",network.name));
+      top.appendChild(element("span","chain-status",network.status==="activity_observed"?"OBSERVED":network.status==="indexed_no_sample_activity"?"NO INDEXED ACTIVITY":network.status==="not_indexed"?"NOT INDEXED":"UNAVAILABLE"));
+      card.appendChild(top);
+      const balance=network.native_balance===null||network.native_balance===undefined?"Balance unavailable":network.native_balance+" "+network.symbol;
+      card.appendChild(element("div","chain-balance",balance));
+      const tokens=Array.isArray(network.assets)?network.assets:[];
+      if(tokens.length){
+        const body=element("div","chain-tokens");
+        body.appendChild(element("div","tiny-label","TOKEN BALANCES · INDEXED"));
+        for(const asset of tokens.slice(0,7)) {
+          const row=element("div","chain-token");
+          row.appendChild(element("span","",asset.symbol));
+          row.appendChild(element("strong","",asset.amount));
+          body.appendChild(row);
+        }
+        card.appendChild(body);
+      }
+      const tx=network.transaction_count??(Array.isArray(network.recent_transactions)&&network.checks?.transactions==="ok"?network.recent_transactions.length:null);
+      card.appendChild(element("p","minor",tx===null?"Transaction count unavailable":String(tx)+(network.transaction_count===null?" recent transactions shown":" confirmed transactions")));
+      if(network.public_labels?.length){
+        const labels=element("div","chain-labels");
+        for(const tag of network.public_labels.slice(0,2))labels.appendChild(element("p","minor",tag.type+": "+tag.label+" · public explorer label"));
+        card.appendChild(labels);
+      }
+      if(network.warnings?.length && network.status!=="activity_observed")card.appendChild(element("p","minor",network.warnings[0]));
+      if(network.explorer_url?.startsWith("https://"))card.appendChild(link(network.explorer_url,"Verify on explorer ↗"));
+      n.appendChild(card);
+    }
+    root.appendChild(n);
+    const notes=element("p","minor chain-notes",data.limitations||"Public indexed data only.");
+    root.appendChild(notes);
+  }
+  async function scanAllNetworks(address,controller){
+    const root=$("chain-results");
+    root.hidden=false;root.replaceChildren();
+    root.appendChild(element("p","minor","Checking supported networks and indexed crypto assets…"));
+    try{
+      const data=await fetchJson(API+"/multichain?address="+encodeURIComponent(address),controller.signal,30000);
+      if(activeRequest!==controller)return;
+      chainResult(data);
+      if(data.format==="bitcoin"){
+        results.hidden=true;
+        setStatus("Bitcoin investigation: "+(data.networks?.[0]?.transaction_count??"unavailable")+" confirmed transactions in the indexed address history. Use the linked explorer to inspect individual transfers.");
+      }
+    }catch(e){
+      if(activeRequest!==controller)return;
+      root.replaceChildren();root.appendChild(element("p","minor","Cross-chain lookup unavailable: "+e.message+". No portfolio or identity claim can be made from this response."));
+    }
+  }
+
   async function lookup(address) {
+    if(isBitcoin(address)){
+      if(activeRequest)activeRequest.abort();
+      const bitcoinController=new AbortController();
+      activeRequest=bitcoinController;activeAddress=String(address).trim();
+      input.value=activeAddress;results.hidden=true;
+      button.disabled=true;button.textContent="Investigating…";
+      setStatus("Searching the Bitcoin address and its confirmed transactions…");
+      try {await scanAllNetworks(activeAddress,bitcoinController);}
+      finally {if(activeRequest===bitcoinController){button.disabled=false;button.textContent="Investigate →";}}
+      return;
+    }
     const parsed=parseWalletInput(address);
     if(parsed.error) {
+      $("chain-results").hidden=true;
       results.hidden=true;
       setStatus(parsed.error,true);
       return;
@@ -301,6 +378,7 @@
       if(activeRequest!==controller)return;
       activeAddress=normalized;
       input.value=normalized;
+      scanAllNetworks(normalized,controller);
       $("explorer-link").href=BLOCKSCOUT+normalized;
       $("result-address").textContent=normalized;
       $("balance").textContent="—";$("shown").textContent="—";$("account-type").textContent="—";
@@ -378,7 +456,7 @@
   originBtn.addEventListener("click",traceOrigin);
   $("export-evidence").addEventListener("click",exportEvidence);
   const initial=new URLSearchParams(location.search).get("address");
-  if(initial&&normalize(initial))lookup(initial);
+  if(initial&&(normalize(initial)||isBitcoin(initial)))lookup(initial);
   function background(){
     const canvas=$("bg-canvas");
     if(!canvas||matchMedia("(prefers-reduced-motion: reduce)").matches)return;

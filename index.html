@@ -9,8 +9,8 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261030-intelligence">
-  <script src="app.js?v=20261030-intelligence" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261030-multichain">
+  <script src="app.js?v=20261030-multichain" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -25,21 +25,22 @@
       <h1>Follow the evidence<span class="accent">.</span><br><span class="muted">Find the connections.</span></h1>
       <p class="lead">Blockchain activity is public. The story behind it isn't always obvious. NODIVRA brings wallet activity and on-chain relationships into a clearer investigative view.</p>
       <div class="hero-actions"><a class="button primary" href="#explore">Explore a wallet <span aria-hidden="true">↗</span></a><a class="button secondary" href="https://github.com/gcasaldi/nodivra/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contribute on GitHub</a></div>
-      <div class="pill-row"><span>WALLET INTELLIGENCE</span><span>ON-CHAIN EVIDENCE</span><span>OSINT</span><span>ETHEREUM FIRST</span></div>
+      <div class="pill-row"><span>WALLET INTELLIGENCE</span><span>ON-CHAIN EVIDENCE</span><span>OSINT</span><span>ETHEREUM · BASE · ARBITRUM · OP · POLYGON · BITCOIN</span></div>
     </section>
     <section class="workspace wrap" id="explore" aria-labelledby="explore-title">
-      <div class="section-head"><div><div class="eyebrow">01 / INVESTIGATE</div><h2 id="explore-title">Wallet explorer</h2></div><span class="badge">LIVE DATA · ETHEREUM</span></div>
+      <div class="section-head"><div><div class="eyebrow">01 / INVESTIGATE</div><h2 id="explore-title">Wallet intelligence</h2></div><span class="badge">MULTI-CHAIN · PUBLIC DATA</span></div>
       <div class="panel">
         <form id="lookup-form" novalidate>
-          <label for="wallet">Ethereum wallet address or ENS name</label>
-          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="0x... or name.eth" aria-describedby="wallet-help" maxlength="260" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
-          <div class="form-foot"><span id="wallet-help">Paste an address, an Etherscan link, or an ENS name. No account required.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
+          <label for="wallet">Crypto wallet address or ENS name</label>
+          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Ethereum 0x..., Bitcoin bc1..., or name.eth" aria-describedby="wallet-help" maxlength="260" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
+          <div class="form-foot"><span id="wallet-help">Search Ethereum-compatible networks and Bitcoin. Paste an address or ENS name.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Enter an address to start exploring its public blockchain activity.</p>
+        <div id="chain-results" class="chain-results" hidden></div>
         <div id="results" hidden>
           <div class="result-header"><div><span class="tiny-label">ADDRESS</span><div id="result-address" class="wallet-address"></div></div><a id="explorer-link" href="#" target="_blank" rel="noopener noreferrer">Open in Blockscout ↗</a></div>
           <div class="metrics">
-            <div class="metric"><span>ETH BALANCE</span><strong id="balance">—</strong></div>
+            <div class="metric"><span>ETHEREUM NATIVE BALANCE</span><strong id="balance">—</strong></div>
             <div class="metric"><span>RECENT INDEXED TX</span><strong id="shown">—</strong></div>
             <div class="metric"><span>ACCOUNT TYPE</span><strong id="account-type">—</strong></div>
           </div>
