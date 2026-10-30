@@ -13,6 +13,7 @@
   <script src="app.js" defer></script>
 </head>
 <body>
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
   <div class="glow glow-one" aria-hidden="true"></div><div class="glow glow-two" aria-hidden="true"></div>
   <header class="header wrap">
     <a href="./" class="brand" aria-label="NODIVRA homepage"><span class="logo" aria-hidden="true">N<span class="dot">.</span></span><span>NODIVRA</span></a>
@@ -31,8 +32,8 @@
       <div class="panel">
         <form id="lookup-form" novalidate>
           <label for="wallet">Ethereum wallet address</label>
-          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="0x... (42 characters)" aria-describedby="wallet-help" maxlength="42" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
-          <div class="form-foot"><span id="wallet-help">Read-only lookup of publicly available Ethereum activity.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
+          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Paste an Ethereum address or explorer URL" aria-describedby="wallet-help" maxlength="260" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
+          <div class="form-foot"><span id="wallet-help">Paste an address, a copied snippet, or an Etherscan link. No account required.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Enter an address to start exploring its public blockchain activity.</p>
         <div id="results" hidden>
@@ -42,9 +43,13 @@
             <div class="metric"><span>TRANSACTIONS SHOWN</span><strong id="shown">—</strong></div>
             <div class="metric"><span>ACCOUNT TYPE</span><strong id="account-type">—</strong></div>
           </div>
-          <div class="table-head"><h3>Recent transactions</h3><span>Latest page only · not a complete history</span></div>
+          <div class="result-controls"><button type="button" id="origin-button" class="button secondary">Trace earliest funding →</button><span id="coverage" class="coverage"></span></div>
+          <div id="origin-result" class="origin-box" hidden></div>
+          <div id="connections" class="connections" hidden></div>
+          <div id="tokens" class="tokens" hidden></div>
+          <div class="table-head"><h3>Recent transactions</h3><span>Most recent external transactions</span></div>
           <div id="transactions" class="tx-list"></div>
-          <p class="disclaimer">Data: Blockscout public Ethereum API. Visible transactions do not establish ownership or wrongdoing. Token transfers, internal movements, earliest funding, and identity attribution are not yet covered here.</p>
+          <p class="disclaimer">Data: Blockscout public Ethereum API through a read-only gateway, with direct fallback. This explorer shows a recent sample and a bounded origin scan; it does not prove identity or wrongdoing. Internal transfers and token transfers are shown separately where available.</p>
         </div>
       </div>
     </section>
@@ -58,6 +63,6 @@
     </section>
     <section class="join wrap"><div><span class="eyebrow">03 / COLLABORATE</span><h2>Good investigations need different perspectives.</h2><p>Interested in blockchain, cybersecurity, OSINT, or visualizing complex data? I'd love to build this with you.</p></div><a class="button primary" href="https://github.com/gcasaldi/nodivra/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Get involved ↗</a></section>
   </main>
-  <footer class="footer wrap"><span>© NODIVRA · An independent open-source project</span><span>Evidence first. Assumptions last.</span></footer>
+  <footer class="footer wrap"><span>© NODIVRA · An independent open-source project <span class="footer-sign">BY <strong>AXIORYTH</strong></span></span><span>Evidence first. Assumptions last.</span></footer>
 </body>
 </html>
