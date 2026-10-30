@@ -219,8 +219,100 @@
 
 
   let flowEvidence=null;
+  let investigationSequence=0;
   function traceText(parent,text,style="minor"){parent.appendChild(element("p",style,text));}
   function graphAddress(address){return "https://eth.blockscout.com/address/"+encodeURIComponent(address);}
+
+  function renderInteractiveNetwork(report,nodes) {
+    const graph=report.graph||{}, edges=(graph.edges||[]).slice(0,50);
+    if(!edges.length)return null;
+    const byId=new Map((graph.nodes||[]).map(n=>[n.address.toLowerCase(),n]));
+    const subject=report.address.toLowerCase();
+    const direction=report.mode?.direction||"in";
+    const layout=new Map(),columns=[[],[],[]];
+    const root=byId.get(subject);
+    if(!root)return null;
+    const rootColumn=direction==="in"?2:direction==="out"?0:1;
+    columns[rootColumn].push(root);
+    layout.set(subject,rootColumn);
+    for(const edge of edges) {
+      for(const address of [edge.from,edge.to]) {
+        const key=address.toLowerCase();
+        if(key===subject||layout.has(key)||!byId.has(key))continue;
+        const column= direction==="in"?Math.max(0,2-edge.hop):
+          direction==="out"?Math.min(2,edge.hop):
+          edge.from.toLowerCase()===subject?2:edge.to.toLowerCase()===subject?0:
+          edge.from.toLowerCase()===edge.observed_via?.toLowerCase()?2:0;
+        layout.set(key,column);columns[column].push(byId.get(key));
+      }
+    }
+    // Nodes only observed in an evidence edge; root is kept even if a provider returns extra metadata.
+    const maxCount=Math.max(1,...columns.map(c=>c.length));
+    const height=Math.max(320,Math.min(1300,maxCount*72+90)),width=960;
+    const positions=new Map();
+    columns.forEach((list,i)=>{
+      const yGap=(height-80)/(list.length+1);
+      list.forEach((n,j)=>positions.set(n.address.toLowerCase(),{x:120+i*355,y:40+(j+1)*yGap}));
+    });
+    const shell=element("div","network-shell");
+    shell.appendChild(element("div","tiny-label","INTERACTIVE NETWORK · CLICK ANY ADDRESS TO INVESTIGATE"));
+    const scroll=element("div","network-scroll");
+    const namespace="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(namespace,"svg");
+    svg.setAttribute("viewBox","0 0 "+width+" "+height);
+    svg.setAttribute("width",String(width));
+    svg.setAttribute("height",String(height));
+    svg.setAttribute("role","img");
+    svg.setAttribute("aria-label","Evidence network showing observed address relationships. A readable list with transaction hashes follows.");
+    svg.classList.add("network-svg");
+    const make=(name,attrs={})=>{
+      const item=document.createElementNS(namespace,name);
+      for(const [k,v] of Object.entries(attrs))item.setAttribute(k,String(v));
+      return item;
+    };
+    const defs=make("defs");
+    const marker=make("marker",{id:"nodivra-arrow",viewBox:"0 0 10 10",refX:9,refY:5,markerWidth:5,markerHeight:5,orient:"auto-start-reverse"});
+    marker.appendChild(make("path",{d:"M0 0 L10 5 L0 10 Z",fill:"#4c9382"}));
+    defs.appendChild(marker);svg.appendChild(defs);
+    const edgeKeys=new Set();
+    for(const e of edges){
+      const a=positions.get(e.from.toLowerCase()),b=positions.get(e.to.toLowerCase());
+      if(!a||!b)continue;
+      const edgeKey=e.from.toLowerCase()+"|"+e.to.toLowerCase()+"|"+e.hop;
+      if(edgeKeys.has(edgeKey))continue;edgeKeys.add(edgeKey);
+      const bend=Math.abs(b.x-a.x)<5?45:0;
+      const path=make("path",{d:"M "+a.x+" "+a.y+" Q "+((a.x+b.x)/2+bend)+" "+((a.y+b.y)/2-18)+" "+b.x+" "+b.y,
+        fill:"none",stroke:e.hop===1?"#5bba9d":"#497783","stroke-width":e.hop===1?2:1.3,
+        "marker-end":"url(#nodivra-arrow)",opacity:e.hop===1?0.8:0.5});
+      const t=make("title");t.textContent="Observed "+e.asset+" transfer · "+e.tx_hash;
+      path.appendChild(t);svg.appendChild(path);
+    }
+    for(const [key,p] of positions){
+      const node=byId.get(key),isRoot=key===subject,tagged=(node.labels||[]).length>0;
+      const g=make("g",{transform:"translate("+p.x+" "+p.y+")",tabindex:"0",role:"button",
+        "aria-label":"Investigate "+node.address});
+      g.style.cursor="pointer";
+      const bg=make("rect",{x:-100,y:-23,width:200,height:46,rx:9,fill:isRoot?"#145744":tagged?"#17443f":"#102731",
+        stroke:isRoot?"#91f8ca":tagged?"#56ac91":"#335d66","stroke-width":isRoot?2:1});
+      g.appendChild(bg);
+      const title=make("text",{x:0,y:-3,"text-anchor":"middle",fill:"#e8f5f1","font-size":12,"font-weight":700});
+      const name=node.labels?.[0]?.name;
+      const short=typeof name==="string"&&name.length?name.slice(0,24):node.address.slice(0,8)+"…"+node.address.slice(-6);
+      title.textContent=short;g.appendChild(title);
+      const sub=make("text",{x:0,y:13,"text-anchor":"middle",fill:"#89aba6","font-size":10});
+      sub.textContent=isRoot?"TARGET":tagged?"PUBLIC LABEL · CHECK SOURCE":"UNKNOWN OWNER";
+      g.appendChild(sub);
+      const tooltip=make("title");tooltip.textContent=node.address;g.appendChild(tooltip);
+      const go=()=>{input.value=node.address;lookup(node.address);$("explore").scrollIntoView({behavior:"smooth"});};
+      g.addEventListener("click",go);
+      g.addEventListener("keydown",event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();go();}});
+      svg.appendChild(g);
+    }
+    scroll.appendChild(svg);shell.appendChild(scroll);
+    shell.appendChild(element("p","minor","The lines show observed transactions, not proven ownership or a continuous path for the same coins. See the hashes below for evidence."));
+    return shell;
+  }
+
   function renderFlowGraph(report) {
     const root=$("trace-output");root.replaceChildren();root.hidden=false;
     const top=element("div","trace-summary");
@@ -228,7 +320,10 @@
     top.appendChild(element("h4","",report.stats.transfers+" observed transfers · "+report.stats.nodes+" connected addresses"));
     traceText(top,"Depth reached: "+report.mode.depth_achieved+" of "+report.mode.depth_requested+" hops · Publicly labelled nodes: "+report.stats.entities_with_public_labels);
     root.appendChild(top);
+    if(report.coverage?.partial)root.appendChild(element("p","trace-warning","Partial evidence: at least one provider failed or returned an incomplete response. Do not interpret missing transfers as zero."));
     const nodes=new Map((report.graph.nodes||[]).map(n=>[n.address.toLowerCase(),n]));
+    const visual=renderInteractiveNetwork(report,nodes);
+    if(visual)root.appendChild(visual);
     const graph=element("div","flow-rows");
     for(const hop of [1,2]){
       const group=(report.graph.edges||[]).filter(e=>e.hop===hop);
@@ -298,6 +393,7 @@
     if(!ADDRESS_RE.test(address)){
       state.textContent="Enter an Ethereum-format (0x...) wallet address first. Bitcoin and Solana tracing need different flow models.";return;
     }
+    const sequence=++investigationSequence;
     flowEvidence=null;output.hidden=true;output.replaceChildren();
     button.disabled=true;button.textContent="Tracing…";
     state.textContent="Querying public transfers, tracing counterparties and checking available public labels…";
@@ -305,11 +401,11 @@
     try {
       const query=new URLSearchParams({address,network,direction,depth});
       const report=await fetchJson(API+"/investigate?"+query.toString(),null,40000);
-      if(address!==activeAddress){state.textContent="Wallet changed; old investigation discarded.";return;}
+      if(address!==activeAddress||sequence!==investigationSequence){return;}
       flowEvidence=report;renderFlowGraph(report);
       state.textContent="Evidence graph created from indexed transactions. Open the linked source before relying on any attribution.";
-    }catch(e){state.textContent="Investigation unavailable: "+e.message+". This is not evidence of an empty wallet.";}
-    finally{button.disabled=false;button.textContent="Run investigation ↗";}
+    }catch(e){if(sequence===investigationSequence)state.textContent="Investigation unavailable: "+e.message+". This is not evidence of an empty wallet.";}
+    finally{if(sequence===investigationSequence){button.disabled=false;button.textContent="Run investigation ↗";}}
   }
 
   function renderAttribution(data) {
@@ -446,6 +542,8 @@
       const bitcoinController=new AbortController();
       activeRequest=bitcoinController;activeAddress=String(address).trim();
       input.value=activeAddress;results.hidden=true;
+      ++investigationSequence;flowEvidence=null;evidenceSnapshot=null;
+      $("trace-output").hidden=true;
       button.disabled=true;button.textContent="Investigating…";
       setStatus("Searching public activity on "+(isBitcoin(address)?"Bitcoin":"Solana")+"…");
       try {await scanAllNetworks(activeAddress,bitcoinController);}
@@ -454,6 +552,7 @@
     }
     const parsed=parseWalletInput(address);
     if(parsed.error) {
+      ++investigationSequence;flowEvidence=null;evidenceSnapshot=null;
       $("chain-results").hidden=true;
       results.hidden=true;
       setStatus(parsed.error,true);
@@ -464,6 +563,7 @@
     button.disabled=true;button.textContent="Investigating…";
     results.hidden=true;$("origin-result").hidden=true;
     evidenceSnapshot=null;
+    ++investigationSequence;
     flowEvidence=null;
     $("trace-output").hidden=true;
     $("trace-state").textContent="Run an investigation to build an evidence-backed flow graph.";

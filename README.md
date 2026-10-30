@@ -1,17 +1,17 @@
 # NODIVRA
 
-**Open-source, multi-chain wallet intelligence and digital asset investigations.**
+**Open-source blockchain intelligence. Follow the funds. Check the evidence.**
 
-I started NODIVRA because blockchain transactions are public, but understanding the relationships behind them isn't always easy.
+I started NODIVRA because I kept seeing wallet addresses in crypto investigations, but finding out what actually happened meant jumping between explorers and long lists of transactions.
 
-NODIVRA aims to bring wallet activity, fund movements, and publicly verifiable connections into one clear investigative view. The goal is to help analysts follow evidence, spot patterns, and understand where a trail begins—or where it ends.
+I wanted one place to start: enter an address, see where it appears, follow the transfers, check the public labels, and keep track of what I can *actually* verify.
 
-NODIVRA now has an early multi-chain discovery preview for five EVM networks and Bitcoin. It checks supported networks, indexed assets, transaction samples and public labels. A beta Investigation Engine can now trace recent native and token transfers up to two hops on supported EVM networks, cross-check public address tags, and export evidence with transaction links. It does **not** identify anonymous wallet owners or claim full historical coverage.
+The current version searches Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana for publicly indexed activity. On EVM networks, the investigation engine also follows native and token transfers up to two hops, shows the relationships in a visual graph, and lets you export the evidence.
 
-I want this to grow as a collaborative project. If you're interested in blockchain, OSINT, threat intelligence, data analysis, or building useful open-source tools, **I'd love to work with you.** See [CONTRIBUTING.md](CONTRIBUTING.md).
+NODIVRA is **not** a way to magically reveal who owns an anonymous wallet. If there isn't a reliable public attribution, I want it to say **unknown**.
 
-**[Web preview](https://gcasaldi.github.io/nodivra/)** · [Contribute](CONTRIBUTING.md)
+**[Try NODIVRA](https://gcasaldi.github.io/nodivra/)** · **[Roadmap](ROADMAP.md)** · **[Contribute](CONTRIBUTING.md)**
 
-> NODIVRA works with public evidence. A blockchain address does not automatically reveal a person's identity, and a connection is not proof of wrongdoing.
+I’d love to build this with others. If you work with blockchain, OSINT, cybersecurity or data visualization, feel free to open an issue or share an idea.
 
-*Status: early development. The preview requires GitHub Pages to be enabled.*
+*Status: public beta. The first investigation tools are implemented, but live-browser testing, provider reliability and deeper cross-chain tracing still need work.*

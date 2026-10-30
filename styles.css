@@ -96,3 +96,10 @@
 .trace-empty{color:#d8bf91;font-size:13px}
 .trace-export{padding-top:18px}
 @media(max-width:650px){.investigation-panel{padding:16px}.trace-controls{display:grid;grid-template-columns:1fr 1fr}.trace-controls .button{grid-column:1/-1}.trace-controls select{width:100%;min-width:0}.flow-meta{gap:8px}}
+
+/* Evidence graph: zoom-friendly, keyboard accessible nodes, same restrained NODIVRA palette. */
+.network-shell{margin:22px 0 24px;padding:16px;border:1px solid #2a5a51;background:linear-gradient(155deg,#071e22,#08161d);border-radius:12px}
+.network-scroll{max-width:100%;overflow:auto;overscroll-behavior-x:contain;margin:12px 0;border:1px solid #1c3940;border-radius:9px}
+.network-svg{display:block;min-width:720px;background:radial-gradient(circle at 45% 45%,#0d3230 0%,#071b23 67%,#08171e 100%)}
+.network-svg g:focus-visible rect{stroke:#bffff0;stroke-width:3}
+.trace-warning{margin-top:12px;color:#f7c58c;background:#332519;border:1px solid #665039;padding:10px 12px;border-radius:8px;font-size:12px}

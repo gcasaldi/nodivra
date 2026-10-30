@@ -351,7 +351,7 @@ async function scanBitcoin(address) {
  return {address,format:"bitcoin",network_scope:["Bitcoin mainnet"],networks:[{
  id:"bitcoin",name:"Bitcoin",symbol:"BTC",explorer_url:"https://mempool.space/address/"+encodeURIComponent(address),
  status: Number(chain.tx_count||0)>0?"activity_observed":"indexed_no_sample_activity",
- native_balance_sats:balance.toString(),native_balance:(Number(balance)/1e8).toFixed(8),
+ native_balance_sats:balance.toString(),native_balance:(balance<0n?"-":"")+(balance<0n?-balance:balance)/100000000n+"."+((balance<0n?-balance:balance)%100000000n).toString().padStart(8,"0"),
  transaction_count:Number(chain.tx_count||0),recent_transactions:recent,assets:[],public_labels:[],
  warnings:["An address is not a person. Bitcoin funds belong to transaction outputs; one transaction can have multiple inputs and outputs."],
  checks:{account:"ok",transactions:txs.status==="fulfilled"?"ok":"unavailable",tokens:"not_applicable"}
@@ -559,26 +559,31 @@ async function investigateFlows(address,options) {
  const finalNodes=[...nodes.values()];
  const sources=[{name:"Blockscout public indexed transfers",url:chain.explorer+"/address/"+address,
    kind:"primary on-chain observation",method:"API v2 address transactions and token transfers"},
-  {name:"Independent transaction cross-check",url:"https://etherscan.io/address/"+address,
-   kind:chain.id==="ethereum"?"independent explorer":"External index (Ethereum only; do not use for other networks)"},
   {name:"Public intelligence tags",url:chain.explorer+"/address/"+address,kind:"explorer and opt-in names"}];
+ if(chain.id==="ethereum") sources.push({name:"Etherscan cross-check",url:"https://etherscan.io/address/"+address,kind:"independent explorer"});
  const attributed=finalNodes.filter(n=>n.labels?.length);
  const flags=finalNodes.filter(n=>n.labels?.some(l=>l.category?.startsWith("Risk")));
- return {version:"0.1-beta",address,network:chain.name,chain_id:chain.chain_id,asset:chain.symbol,
+ const issueCount=problems.length+expanded.filter(p=>p.native!=="ok"||p.token!=="ok").length+
+     (root.status.native!=="ok"?1:0)+(root.status.token!=="ok"?1:0);
+ const observedCounterparties=[...new Set(edges.flatMap(e=>[e.from.toLowerCase(),e.to.toLowerCase()]))]
+  .filter(k=>k!==address.toLowerCase()).length;
+ const publicEntities=finalNodes.filter(n=>n.labels?.some(l=>l.confidence==="public_label_only")).length;
+ return {version:"0.4.0-beta",address,network:chain.name,network_id:chain.id,chain_id:chain.chain_id,asset:chain.symbol,
   queried_at:new Date().toISOString(),mode:{direction,depth_requested:depth,depth_achieved:edges.some(e=>e.hop===2)?2:edges.length?1:0},
   graph:{nodes:finalNodes,edges},stats:{nodes:finalNodes.length,transfers:edges.length,entities_with_public_labels:attributed.length,
-   risk_flags_reported_by_explorer:flags.length,expanded_peers:expanded.length},
-  coverage:{root:root.status,expanded,problems,has_observed_transfers:edges.length>0,limit:TRACE_LIMITS,
+   risk_flags_reported_by_explorer:flags.length,expanded_peers:expanded.length,observed_counterparties:observedCounterparties,source_warnings:issueCount,publicly_tagged_entities:publicEntities},
+  coverage:{root:root.status,expanded,problems,partial:issueCount>0,has_observed_transfers:edges.length>0,limit:TRACE_LIMITS,
    sample:"At most one recent API page per visited address. Depth 2; max four first-hop peers and three second-hop links each. Token and native transfers are distinct evidence types."},
   osint:{public_labels:attributed.map(n=>({address:n.address,labels:n.labels})),sources},
   conclusions:[
-   edges.length?"Recent on-chain transfer relationships were observed; follow the linked transaction hashes for verification.":"No qualifying transfers observed in the returned sample. This does not prove that the address has no history.",
+   edges.length?"Recent indexed transfers were found. A flow graph is a map of observed transfers, not proof that each intermediate wallet forwarded the same funds.":"No qualifying transfers observed in the returned sample. This does not prove that the address has no history.",
    attributed.length?"Some nodes have public explorer, ENS or community labels; none proves the legal owner.":"No public attributed entities were confirmed in the enriched nodes.",
    "A chain of transfers is not proof of common wallet ownership or criminal involvement."
   ],
   identity_status:"No legal identity inferred; any public labels must be verified independently.",
   limitations:["This is a bounded sample, not a complete historical multi-chain financial flow reconstruction.",
    "Contracts, exchange hot wallets, bridges, token swaps, internal calls and mixers can break naive transfer-chain assumptions.",
+   "Amounts and timing do not prove conservation of a particular asset across multiple hops; the graph depicts address interactions only.",
    "Source labels are public claims, not legal identities. No private KYC data is accessed.",
    "No person-level identification, geolocation or guilt conclusions are generated."]};
 }
