@@ -74,13 +74,32 @@ async function origin(addr) {
  }
  return {address:addr, source:"Blockscout Ethereum API v2",pages_scanned:pages,transactions_scanned:scanned,complete,earliest_transaction_observed:oldest,earliest_native_funding_observed:earliestFunding, warning:complete?"Earliest native funding is based on indexed external transactions; token and internal transfers may predate it.":"PARTIAL SCAN: Older transactions may exist. Do not report this as the first-ever funding transaction."};
 }
+async function resolveEns(name) {
+ const safe=String(name||"").toLowerCase();
+ if(!/^[a-z0-9][a-z0-9-]{0,62}\.eth$/.test(safe))err("Enter a valid ENS name ending in .eth.",400);
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),10000);
+ try {
+   const res=await fetch("https://bens.services.blockscout.com/api/v1/1/domains/"+encodeURIComponent(safe),
+     {headers:{Accept:"application/json"},signal:controller.signal,cf:{cacheTtl:120,cacheEverything:true}});
+   if(res.status===404)err("ENS name not found in the public index.",404);
+   if(!res.ok)err("ENS resolver temporarily unavailable.",502);
+   const data=await res.json();
+   const address= typeof data.resolved_address==="string" ? data.resolved_address :
+       data.resolved_address?.hash || data.address?.hash || data.address || null;
+   if(!address || !ADDR.test(address))err("No Ethereum address record found for this ENS name.",404);
+   return {name:safe,address,source:"Blockscout ENS service"};
+ } finally {clearTimeout(timer);}
+}
+
 export default {
  async fetch(req) {
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   if(req.method!=="GET")return json(req,{error:"Read-only API."},405);
   const url=new URL(req.url);
   if(url.pathname==="/health")return json(req,{ok:true,service:"NODIVRA read-only API",source:"Blockscout"});
-  if(!["/lookup","/origin"].includes(url.pathname))return json(req,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve"].includes(url.pathname))return json(req,{error:"Not found"},404);
+  if(url.pathname==="/resolve") {try{return json(req,await resolveEns(url.searchParams.get("name")));}catch(e){return json(req,{error:String(e.message||"ENS resolution failed.")},e.status||502);}}
   const addr=url.searchParams.get("address")||"";
   if(!ADDR.test(addr))return json(req,{error:"Provide a valid Ethereum address."},400);
   try {

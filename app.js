@@ -31,7 +31,20 @@
     const match=value.match(/0x[a-fA-F0-9]{40}(?![a-fA-F0-9])/);
     return match?match[0]:null;
   }
-  function showWei(wei,decimals=6) {
+  function parseWalletInput(raw) {
+    const value=String(raw||"").trim();
+    const exact=normalize(value);
+    if(exact) return {address:exact};
+    const ens=value.match(/(?:^|[^a-z0-9-])([a-z0-9][a-z0-9-]{0,62}\.eth)(?=$|[^a-z0-9.-])/i);
+    if(ens) return {ens:ens[1].toLowerCase()};
+    const fragment=value.match(/0x([a-fA-F0-9]+)/);
+    if(fragment) {
+      const n=fragment[1].length;
+      return {error:"Incomplete Ethereum address: found "+n+" hexadecimal characters after 0x; exactly 40 are required. Copy the full address or enter its ENS name. NODIVRA will not guess missing characters."};
+    }
+    return {error:"Paste a complete Ethereum address, an Etherscan link, or an ENS name ending in .eth."};
+  }
+    function showWei(wei,decimals=6) {
     if(wei===null||wei===undefined||wei==="")return "Unavailable";
     try {
       const n=BigInt(wei),unit=1000000000000000000n;
@@ -141,21 +154,31 @@
     try {const url=new URL(location.href);url.searchParams.set("address",address);history.replaceState(null,"",url);}catch(_){}
   }
   async function lookup(address) {
-    const normalized=normalize(address);
-    if(!normalized) {
+    const parsed=parseWalletInput(address);
+    if(parsed.error) {
       results.hidden=true;
-      setStatus("Please paste an Ethereum address (0x + 40 hexadecimal characters), or an explorer link containing one.",true);
+      setStatus(parsed.error,true);
       return;
     }
     if(activeRequest)activeRequest.abort();
-    const controller=new AbortController();activeRequest=controller;activeAddress=normalized;
-    input.value=normalized;button.disabled=true;button.textContent="Investigating…";
+    const controller=new AbortController();activeRequest=controller;
+    button.disabled=true;button.textContent="Investigating…";
     results.hidden=true;$("origin-result").hidden=true;
-    $("explorer-link").href=BLOCKSCOUT+normalized;
-    $("result-address").textContent=normalized;
-    $("balance").textContent="—";$("shown").textContent="—";$("account-type").textContent="—";
-    setStatus("Retrieving on-chain evidence for "+trimHash(normalized)+"…");
+    let normalized=parsed.address;
     try {
+      if(parsed.ens) {
+        setStatus("Resolving ENS name "+parsed.ens+" through the public registry…");
+        const resolved=await fetchJson(API+"/resolve?name="+encodeURIComponent(parsed.ens),controller.signal,15000);
+        if(!ADDRESS_RE.test(resolved.address||"")) throw new Error("The ENS name has no valid Ethereum address record.");
+        normalized=resolved.address;
+      }
+      if(activeRequest!==controller)return;
+      activeAddress=normalized;
+      input.value=normalized;
+      $("explorer-link").href=BLOCKSCOUT+normalized;
+      $("result-address").textContent=normalized;
+      $("balance").textContent="—";$("shown").textContent="—";$("account-type").textContent="—";
+      setStatus("Retrieving on-chain evidence for "+trimHash(normalized)+"…");
       const {data,provider}=await lookupData(normalized,controller.signal);
       if(activeRequest!==controller)return;
       const account=data.account||{};
@@ -176,14 +199,19 @@
       }
     }catch(e) {
       if(activeRequest!==controller)return;
-      results.hidden=false;
-      $("connections").hidden=true;$("tokens").hidden=true;
-      txList.replaceChildren();
-      $("coverage").textContent="Provider unavailable — explorer links remain available";
-      setStatus("Could not retrieve public data: "+e.message+". You can still inspect the address on Blockscout or Etherscan.",true);
-      const a=link(ETHERSCAN+normalized,"Open Etherscan ↗");
-      status.appendChild(document.createTextNode(" "));status.appendChild(a);
-    }finally{
+      if(!normalized) {
+        results.hidden=true;
+        setStatus("Could not resolve ENS name: "+e.message+". Please verify the name or paste the address directly.",true);
+      } else {
+        results.hidden=false;
+        $("connections").hidden=true;$("tokens").hidden=true;
+        txList.replaceChildren();
+        $("coverage").textContent="Provider unavailable — explorer links remain available";
+        setStatus("Could not retrieve public data: "+e.message+". You can still inspect the address on Blockscout or Etherscan.",true);
+        status.appendChild(document.createTextNode(" "));
+        status.appendChild(link(ETHERSCAN+normalized,"Open Etherscan ↗"));
+      }
+    }finally {
       if(activeRequest===controller){button.disabled=false;button.textContent="Investigate →";}
     }
   }

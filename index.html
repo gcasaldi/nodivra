@@ -31,9 +31,9 @@
       <div class="section-head"><div><div class="eyebrow">01 / INVESTIGATE</div><h2 id="explore-title">Wallet explorer</h2></div><span class="badge">LIVE DATA · ETHEREUM</span></div>
       <div class="panel">
         <form id="lookup-form" novalidate>
-          <label for="wallet">Ethereum wallet address</label>
-          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Paste an Ethereum address or explorer URL" aria-describedby="wallet-help" maxlength="260" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
-          <div class="form-foot"><span id="wallet-help">Paste an address, a copied snippet, or an Etherscan link. No account required.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
+          <label for="wallet">Ethereum wallet address or ENS name</label>
+          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="0x... or name.eth" aria-describedby="wallet-help" maxlength="260" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
+          <div class="form-foot"><span id="wallet-help">Paste an address, an Etherscan link, or an ENS name. No account required.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Enter an address to start exploring its public blockchain activity.</p>
         <div id="results" hidden>
