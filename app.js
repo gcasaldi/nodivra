@@ -75,7 +75,7 @@
   function valOK(jobs) {return jobs[0]?.status==="fulfilled" || jobs.slice(1).some(j=>j.status==="fulfilled" && Array.isArray(j.value?.items));}
   async function lookupData(address,signal) {
     try {
-      const data=await fetchJson(API+"/lookup?address="+encodeURIComponent(address),signal,16000);
+      const data=await fetchJson(API+"/lookup?address="+encodeURIComponent(address),signal,35000);
       return {data,provider:"NODIVRA gateway · Blockscout"};
     } catch(e) {
       if(signal.aborted)throw e;
