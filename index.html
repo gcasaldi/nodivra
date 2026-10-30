@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="NODIVRA is an open-source blockchain intelligence project for exploring wallet activity, tracing funds, and evaluating publicly verifiable connections.">
+  <meta name="keywords" content="blockchain intelligence,crypto forensics,wallet analysis,OSINT,threat intelligence,ethereum,open source">
+  <meta property="og:title" content="NODIVRA — Blockchain Intelligence">
+  <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
+  <meta name="theme-color" content="#07131a">
+  <title>NODIVRA — Blockchain Intelligence</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="glow glow-one" aria-hidden="true"></div><div class="glow glow-two" aria-hidden="true"></div>
+  <header class="header wrap">
+    <a href="./" class="brand" aria-label="NODIVRA homepage"><span class="logo" aria-hidden="true">N<span class="dot">.</span></span><span>NODIVRA</span></a>
+    <nav aria-label="Main navigation"><a href="#mission">Mission</a><a href="#explore">Explore</a><a class="nav-cta" href="https://github.com/gcasaldi/nodivra" target="_blank" rel="noopener noreferrer">GitHub ↗</a></nav>
+  </header>
+  <main>
+    <section class="hero wrap" id="mission">
+      <div class="eyebrow"><span class="live-dot"></span> OPEN-SOURCE INTELLIGENCE PROJECT <span class="version">/ EARLY ACCESS</span></div>
+      <h1>Follow the evidence<span class="accent">.</span><br><span class="muted">Find the connections.</span></h1>
+      <p class="lead">Blockchain activity is public. The story behind it isn't always obvious. NODIVRA brings wallet activity and on-chain relationships into a clearer investigative view.</p>
+      <div class="hero-actions"><a class="button primary" href="#explore">Explore a wallet <span aria-hidden="true">↗</span></a><a class="button secondary" href="https://github.com/gcasaldi/nodivra/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contribute on GitHub</a></div>
+      <div class="pill-row"><span>WALLET INTELLIGENCE</span><span>ON-CHAIN EVIDENCE</span><span>OSINT</span><span>ETHEREUM FIRST</span></div>
+    </section>
+    <section class="workspace wrap" id="explore" aria-labelledby="explore-title">
+      <div class="section-head"><div><div class="eyebrow">01 / INVESTIGATE</div><h2 id="explore-title">Wallet explorer</h2></div><span class="badge">LIVE DATA · ETHEREUM</span></div>
+      <div class="panel">
+        <form id="lookup-form" novalidate>
+          <label for="wallet">Ethereum wallet address</label>
+          <div class="input-row"><input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="0x... (42 characters)" aria-describedby="wallet-help" maxlength="42" required><button id="lookup-button" class="button primary" type="submit">Investigate <span aria-hidden="true">→</span></button></div>
+          <div class="form-foot"><span id="wallet-help">Read-only lookup of publicly available Ethereum activity.</span><button class="text-button" type="button" id="example">Try an example ↗</button></div>
+        </form>
+        <p class="notice" role="status" id="status" aria-live="polite">Enter an address to start exploring its public blockchain activity.</p>
+        <div id="results" hidden>
+          <div class="result-header"><div><span class="tiny-label">ADDRESS</span><div id="result-address" class="wallet-address"></div></div><a id="explorer-link" href="#" target="_blank" rel="noopener noreferrer">Open in Blockscout ↗</a></div>
+          <div class="metrics">
+            <div class="metric"><span>ETH BALANCE</span><strong id="balance">—</strong></div>
+            <div class="metric"><span>TRANSACTIONS SHOWN</span><strong id="shown">—</strong></div>
+            <div class="metric"><span>ACCOUNT TYPE</span><strong id="account-type">—</strong></div>
+          </div>
+          <div class="table-head"><h3>Recent transactions</h3><span>Latest page only · not a complete history</span></div>
+          <div id="transactions" class="tx-list"></div>
+          <p class="disclaimer">Data: Blockscout public Ethereum API. Visible transactions do not establish ownership or wrongdoing. Token transfers, internal movements, earliest funding, and identity attribution are not yet covered here.</p>
+        </div>
+      </div>
+    </section>
+    <section class="build wrap">
+      <div class="section-head"><div><div class="eyebrow">02 / DIRECTION</div><h2>Built to ask better questions.</h2></div></div>
+      <div class="cards">
+        <article class="feature"><span class="num">01</span><h3>Trace origins</h3><p>Explore where funds came from and how transfers connect across addresses.</p><span class="soon">PLANNED</span></article>
+        <article class="feature"><span class="num">02</span><h3>See the network</h3><p>Turn long transaction histories into a graph that makes relationships easier to investigate.</p><span class="soon">PLANNED</span></article>
+        <article class="feature"><span class="num">03</span><h3>Verify attribution</h3><p>Link publicly known entities to on-chain evidence, with sources and clear uncertainty.</p><span class="soon">PLANNED</span></article>
+      </div>
+    </section>
+    <section class="join wrap"><div><span class="eyebrow">03 / COLLABORATE</span><h2>Good investigations need different perspectives.</h2><p>Interested in blockchain, cybersecurity, OSINT, or visualizing complex data? I'd love to build this with you.</p></div><a class="button primary" href="https://github.com/gcasaldi/nodivra/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Get involved ↗</a></section>
+  </main>
+  <footer class="footer wrap"><span>© NODIVRA · An independent open-source project</span><span>Evidence first. Assumptions last.</span></footer>
+</body>
+</html>
