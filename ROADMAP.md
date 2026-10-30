@@ -17,7 +17,8 @@ The question I want it to answer is simple: **what can I actually find out about
 ## What I'm improving now
 
 - [ ] Test the complete live website and API with several real wallets across networks.
-- [ ] Make the API fallbacks, pagination and rate-limit handling more reliable.
+- [x] Add independent RPC balance/type fallback on five EVM networks when indexers refuse requests.
+- [ ] Improve rate-limit handling and transaction pagination; RPC balance alone does not supply a history.
 - [ ] Improve token classification and filter obvious spam tokens without hiding evidence.
 - [ ] Make the tracing graph easier to navigate on mobile.
 - [ ] Add more automated tests for cross-chain data and unusual transactions.

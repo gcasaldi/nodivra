@@ -21,12 +21,13 @@ async function getJson(url,ms=8500) {
   } finally {clearTimeout(timer);}
 }
 async function blockscout(path,ms=8500) {return getJson(BLOCKSCOUT+path,ms);}
-async function rpcRead(address,endpoint) {
+async function rpcRead(address,endpoint,expectedChainId=1) {
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8500);
   const calls=[
     {jsonrpc:"2.0",id:1,method:"eth_getBalance",params:[address,"latest"]},
     {jsonrpc:"2.0",id:2,method:"eth_getTransactionCount",params:[address,"latest"]},
-    {jsonrpc:"2.0",id:3,method:"eth_getCode",params:[address,"latest"]}
+    {jsonrpc:"2.0",id:3,method:"eth_getCode",params:[address,"latest"]},
+    {jsonrpc:"2.0",id:4,method:"eth_chainId",params:[]}
   ];
   try {
     const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(calls),signal:controller.signal});
@@ -34,7 +35,8 @@ async function rpcRead(address,endpoint) {
     const data=await response.json();
     if(!Array.isArray(data))failure("RPC returned invalid batch",502);
     const byId=new Map(data.map(item=>[item.id,item]));
-    for(const id of [1,2,3]) if(typeof byId.get(id)?.result!=="string")failure("Incomplete RPC batch",502);
+    for(const id of [1,2,3,4]) if(typeof byId.get(id)?.result!=="string")failure("Incomplete RPC batch",502);
+    if(BigInt(byId.get(4).result)!==BigInt(expectedChainId))failure("RPC chain ID mismatch",502);
     return {coin_balance:BigInt(byId.get(1).result).toString(),outgoing_nonce:BigInt(byId.get(2).result).toString(),
       is_contract:byId.get(3).result!=="0x" && byId.get(3).result!=="0x0",provider:endpoint};
   } finally {clearTimeout(timer);}
@@ -261,6 +263,38 @@ const NETWORKS = [
  {id:"optimism",name:"OP Mainnet",symbol:"ETH",explorer:"https://optimism.blockscout.com",chain_id:10},
  {id:"polygon",name:"Polygon PoS",symbol:"POL",explorer:"https://polygon.blockscout.com",chain_id:137}
 ];
+
+const EVM_PUBLIC_RPCS={
+ ethereum:["https://ethereum-rpc.publicnode.com","https://eth.drpc.org"],
+ base:["https://base-rpc.publicnode.com","https://base.drpc.org"],
+ arbitrum:["https://arbitrum-one-rpc.publicnode.com","https://arbitrum.drpc.org"],
+ optimism:["https://optimism-rpc.publicnode.com","https://optimism.drpc.org"],
+ polygon:["https://polygon-bor-rpc.publicnode.com","https://polygon.drpc.org"]
+};
+function formattedNative(wei){
+ const n=BigInt(wei),whole=n/1000000000000000000n;
+ const frac=(n%1000000000000000000n).toString().padStart(18,"0").slice(0,6).replace(/0+$/,"");
+ return whole.toString()+(frac?"."+frac:"");
+}
+async function partialRpcFallback(answer,network,address){
+ const endpoints=EVM_PUBLIC_RPCS[network.id]||[];
+ for(const endpoint of endpoints){
+   try {
+     const verified=await rpcRead(address,endpoint,network.chain_id);
+     answer.native_balance_wei=verified.coin_balance;
+     answer.native_balance=formattedNative(verified.coin_balance);
+     answer.account_type=verified.is_contract?"Smart contract":"EOA";
+     answer.checks.rpc="ok";
+     answer.rpc_provider=endpoint;
+     answer.status="rpc_partial";
+     answer.warnings.unshift("Explorer indexing unavailable. RPC confirms current balance and code only; transaction and token history is NOT verified.");
+     return answer;
+   } catch(e){answer.warnings.push("RPC backup "+endpoint+" unavailable: "+String(e.message).slice(0,70));}
+ }
+ answer.checks.rpc="unavailable";
+ return answer;
+}
+
 const BTC = /^(?:bc1[ac-hj-np-z02-9]{11,87}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/;
 async function networkRequest(base,path,ms=8000) {
  const c=new AbortController();const timer=setTimeout(()=>c.abort(),ms);
@@ -295,15 +329,13 @@ async function scanEvmNetwork(network,address) {
  let account=null;
  try{
    const data=await networkRequest(base,uri);
-   if(data.missing){answer.status="not_indexed";answer.checks.account="not_indexed";answer.warnings.push("No public address record returned by this indexer; activity elsewhere is not excluded.");return answer;}
+   if(data.missing){answer.status="not_indexed";answer.checks.account="not_indexed";answer.warnings.push("No public address record returned by this indexer; activity elsewhere is not excluded.");return await partialRpcFallback(answer,network,address);}
    if(data&&typeof data==="object" && data.hash?.toLowerCase()===address.toLowerCase()){account=data;answer.checks.account="ok";}
-   else {answer.warnings.push("Explorer account response did not match the queried address.");return answer;}
- }catch(e){answer.warnings.push("Account lookup unavailable: "+String(e.message).slice(0,100));return answer;}
+   else {answer.warnings.push("Explorer account response did not match the queried address.");return await partialRpcFallback(answer,network,address);}
+ }catch(e){answer.warnings.push("Account lookup unavailable: "+String(e.message).slice(0,100));return await partialRpcFallback(answer,network,address);}
  if(typeof account.coin_balance==="string" && /^\d+$/.test(account.coin_balance)){
   answer.native_balance_wei=account.coin_balance;
-  const x=BigInt(account.coin_balance),whole=x/1000000000000000000n;
-  const frac=(x%1000000000000000000n).toString().padStart(18,"0").slice(0,6).replace(/0+$/,"");
-  answer.native_balance=whole.toString()+(frac?"."+frac:"");
+  answer.native_balance=formattedNative(account.coin_balance);
  }
  if(typeof account.is_contract==="boolean")answer.account_type=account.is_contract?"Smart contract":"EOA";
  if(account.name)answer.public_labels.push({label:String(account.name),type:"Explorer name tag",source:network.explorer+"/address/"+address});
@@ -331,10 +363,11 @@ async function scanEvm(address) {
   assets:[],native_balance:null,transaction_count:null,recent_transactions:[],public_labels:[],warnings:[String(r.reason?.message||"Service unavailable")]}));
  const observed=networks.filter(n=>n.status==="activity_observed").map(n=>n.name);
  const tagged=networks.flatMap(n=>(n.public_labels||[]).map(tag=>({...tag,network:n.name})));
- const checked=networks.filter(n=>n.checks?.account==="ok").length;
+ const checked=networks.filter(n=>n.checks?.account==="ok"||n.checks?.rpc==="ok").length;
+ const rpcOnly=networks.filter(n=>n.status==="rpc_partial").map(n=>n.name);
  return {address,format:"evm",network_scope:NETWORKS.map(n=>n.name),networks,
   discovery:{active_networks_observed:observed,labels:tagged,checked_networks:checked,total_networks:NETWORKS.length,
-   summary:observed.length?"Observed assets or transfers on "+observed.join(", ")+".":"No activity detected in the indexed samples on the networks that responded. Verify the address before inferring inactivity.",
+   summary:observed.length?"Observed assets or transfers on "+observed.join(", ")+".":rpcOnly.length?"Explorer indexing limited. Read-only RPC balance/type verified for "+rpcOnly.join(", ")+", but transaction activity is unknown.":"No indexed activity was returned on responding networks. Missing provider data must not be interpreted as zero activity.",
    goal:"Follow documented transfers and labels; this is not proof that one person controls every activity."},
   limitations:"This scans five supported EVM networks, not all blockchains. An EVM address is valid on multiple networks without a registration event. Native and token quantities are not an aggregate USD portfolio. Public API coverage may be incomplete.",
   checked_at:new Date().toISOString()};

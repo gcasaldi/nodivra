@@ -481,17 +481,18 @@
     }
     const networks=data.networks;
     const observed=networks.filter(n=>n.status==="activity_observed");
+    const rpcOnly=networks.filter(n=>n.status==="rpc_partial");
     const unavailable=networks.filter(n=>n.status==="unavailable");
     const summary=element("div","network-overview");
     const headline=element("div","network-headline");
     headline.appendChild(element("strong","",data.format==="bitcoin"?"Bitcoin address":data.format==="solana"?"Solana address":"Cross-chain overview"));
-    headline.appendChild(element("span","network-count",observed.length+" active · "+unavailable.length+" unavailable · "+networks.length+" checked"));
+    headline.appendChild(element("span","network-count",observed.length+" indexed · "+rpcOnly.length+" RPC-only · "+unavailable.length+" unavailable"));
     summary.appendChild(headline);
     const chipRow=element("div","network-chips");
     for(const network of networks) {
-      const chip=element("span","network-chip "+(network.status==="activity_observed"?"is-active":network.status==="unavailable"?"is-unavailable":"is-empty"));
+      const chip=element("span","network-chip "+(network.status==="activity_observed"?"is-active":network.status==="rpc_partial"?"is-partial":network.status==="unavailable"?"is-unavailable":"is-empty"));
       chip.appendChild(element("strong","",network.name));
-      chip.appendChild(element("span","",network.status==="activity_observed"?"Activity":network.status==="unavailable"?"Unavailable":network.status==="not_indexed"?"Not indexed":"No activity found"));
+      chip.appendChild(element("span","",network.status==="activity_observed"?"Activity":network.status==="rpc_partial"?"Balance only":network.status==="unavailable"?"Unavailable":network.status==="not_indexed"?"Not indexed":"No index activity"));
       chipRow.appendChild(chip);
     }
     summary.appendChild(chipRow);
