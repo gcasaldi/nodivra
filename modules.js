@@ -70,6 +70,13 @@
     scenario=kind;
     for(const step of STEPS){state[step]="Not started";setEmpty(step,true);}
     state.investigate="Ready";
+    // A new case must never inherit visible findings from the previous one.
+    for(const id of ["results","name-results","transaction-result","research-results","chain-results",
+       "trace-leads","trace-details","case-workspace"]){
+      const el=$(id);if(el)el.hidden=true;
+    }
+    const traceStatus=$("trace-state");
+    if(traceStatus)traceStatus.textContent="Enter an EVM wallet and run Trace to inspect verified transfer links.";
     $("advanced-evidence").hidden=true;
     clearIncident();open("investigate");
     update();
