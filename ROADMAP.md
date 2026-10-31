@@ -7,6 +7,9 @@ The question I want it to answer is simple: **what can I actually find out about
 ## What I've built
 
 - [x] Search public activity on Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana.
+- [x] Add on-demand historical FuseChain research lookup for Ethereum addresses with explicit label and source limitations.
+- [x] Document Elliptic Bitcoin as an offline graph-ML benchmark; it is not an address-to-identity database.
+- [x] Add a selective CSV preparation script for the large Ethereum research dataset (no automatic 92 GB download).
 - [x] Start from an EVM transaction hash on a selected network and follow its sender or recipient.
 - [x] Search public ENS names using a possible name or surname, with clear evidence and uncertainty labels.
 - [x] Cache public search results and stagger cross-chain requests to reduce upstream rate-limit bursts.
@@ -26,7 +29,8 @@ The question I want it to answer is simple: **what can I actually find out about
 - [ ] Add verified public-profile cross-checks for name-to-wallet attribution, without treating matching ENS names as proof of identity.
 - [ ] Improve token classification and filter obvious spam tokens without hiding evidence.
 - [ ] Make the tracing graph easier to navigate on mobile.
-- [ ] Add more automated tests for cross-chain data and unusual transactions.
+- [ ] Add more automated tests for cross-chain data, dataset lookup behavior and unusual transactions.
+- [ ] Validate real HF filtered queries and provider availability; do not claim live research coverage until tested.
 
 ## What I'd love to build next
 

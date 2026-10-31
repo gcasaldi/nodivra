@@ -254,3 +254,11 @@ body{background:#071219}
 .name-research strong{font-size:11px}
 .name-research a{font-size:11px;color:var(--accent)}
 @media(max-width:620px){.name-candidate{flex-direction:column}.name-candidate-actions{justify-content:start}}
+
+.research-results{margin:12px 0;padding:12px 14px;border:1px solid #356359;border-radius:9px;background:#0b2228}
+.research-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px}
+.research-heading strong{font-size:13px;color:#d5f1e6}
+.research-heading span{font-size:10px;color:#98b6ac}
+.research-message{font-size:12px;color:#f0d7a9;margin:8px 0}
+.research-results a{display:inline-block;font-size:11px;color:var(--accent);margin-top:5px}
+.research-disclaimer{font-size:10px;color:#8dacaa;margin:10px 0 0}

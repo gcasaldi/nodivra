@@ -778,13 +778,61 @@ async function discoverPublicEnsNames(raw) {
   ]};
 }
 
+
+// Historical research labels are never legal attribution or a live fraud verdict.
+// FuseChain, MIT licensed, 2017–2021 sample, ~35k Ethereum addresses.
+// No arbitrary SQL input: the wallet address is regex-validated before query construction.
+async function historicalResearch(address) {
+ if(!ADDRESS.test(address))failure("Valid EVM address required.",400);
+ const source="https://huggingface.co/datasets/Nileshka/fusechain-data";
+ const query=new URLSearchParams({dataset:"Nileshka/fusechain-data",config:"default",split:"train",
+   where:'"address"=\''+address.toLowerCase()+'\'',offset:"0",length:"1"});
+ const api="https://datasets-server.huggingface.co/filter?"+query.toString();
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),11000);
+ try {
+  const response=await fetch(api,{headers:{Accept:"application/json"},signal:controller.signal,
+    cf:{cacheTtl:3600,cacheEverything:true}});
+  if(!response.ok){
+   const kind=response.status===429?"rate_limited":response.status===422||response.status===404?"not_indexed":"provider_error";
+   return {address,status:"unavailable",source,source_id:"FuseChain historical dataset",issue:kind,
+     detail:"Historical dataset query unavailable (HTTP "+response.status+"); this is NOT a negative classification.",
+     label:null,source_period:"2017–2021"};
+  }
+  const payload=await response.json();
+  const record=(Array.isArray(payload?.rows)?payload.rows:[]).map(x=>x?.row||x)
+    .find(x=>typeof x?.address==="string"&&x.address.toLowerCase()===address.toLowerCase());
+  const partial=payload?.partial===true;
+  if(!record){
+   return {address,status:partial?"partial_index":"not_in_dataset",source,source_id:"FuseChain historical dataset",
+     label:null,source_period:"2017–2021",
+     detail:partial?"Dataset filter only indexed a partial slice; absence has no meaning.":
+       "Not present in the indexed research sample. This does NOT mean safe or clean."};
+  }
+  const label=Number(record.is_scam)===1?"historically_labeled_scam":
+              Number(record.is_scam)===0?"historically_labeled_normal":null;
+  const days=Number(record.active_days);
+  const features={active_days:Number.isFinite(days)&&days>=0?Math.floor(days):null};
+  return {address,status:"dataset_match",source,source_id:"FuseChain historical dataset",
+    label,source_period:"2017–2021",dataset_license:"MIT",features,
+    reliability:"unverified historical research annotation — NOT proof of criminality or current risk",
+    alert:label==="historically_labeled_scam"?
+      "A historical research dataset flagged this address. Confirm with dated primary evidence before any investigative conclusion.":
+      "Research classification is not an endorsement, exoneration or identity verification.",
+    detail:"Social indicators in FuseChain are global market/community aggregates, not wallet owner behavior. No real-world identity is inferred."};
+ }catch(e){
+  return {address,status:"unavailable",source,source_id:"FuseChain historical dataset",label:null,source_period:"2017–2021",
+    issue:"network_or_provider_error",detail:"Research provider unavailable or timed out. No classification can be made."};
+ }finally{clearTimeout(timer);}
+}
+
 export default {
  async fetch(request,env,context) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
   if(request.method!=="GET")return reply(request,{error:"Read-only API"},405);
   const u=new URL(request.url),path=u.pathname;
   // Cache public lookups at the edge so retries and repeated searches do not hammer upstream indexers.
-  const cacheable=new Set(["/lookup","/resolve","/multichain","/name-search"]);
+  const cacheable=new Set(["/lookup","/resolve","/multichain","/name-search","/research-labels"]);
   const cache=typeof caches!=="undefined"&&caches?.default?caches.default:null;
   if(cacheable.has(path)&&cache){
     try {const hit=await cache.match(request);if(hit)return hit;}catch(e){}
@@ -792,7 +840,7 @@ export default {
   const send=(data,status=200)=>{
     const response=reply(request,data,status);
     if(status===200&&cacheable.has(path)&&cache){
-      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:180));
+      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:path==="/research-labels"?3600:180));
       try {
         const task=cache.put(request,response.clone());
         if(context?.waitUntil)context.waitUntil(task);else task.catch(()=>{});
@@ -801,9 +849,10 @@ export default {
     return response;
   };
   if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
-  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search"].includes(path))return reply(request,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search","/research-labels"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/name-search")return send(await discoverPublicEnsNames(u.searchParams.get("q")));
+   if(path==="/research-labels"){const address=u.searchParams.get("address")||"";return send(await historicalResearch(address));}
    if(path==="/resolve")return send(await resolveEns(u.searchParams.get("name")));
    if(path==="/transaction"){const hash=u.searchParams.get("hash")||"";if(!/^0x[a-fA-F0-9]{64}$/.test(hash))failure("Valid 0x + 64-digit transaction hash required.",400);return reply(request,await inspectTransaction(hash,u.searchParams.get("network")||"ethereum"));}
    if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return reply(request,await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}

@@ -140,3 +140,34 @@ test('HTTP 429 never becomes a fabricated empty wallet history',async()=>{
  assert.equal(result.status,503);
  assert.match(result.json.error,/429/);
 });
+
+test('historical research exact address match reports dataset class as unverified',async()=>{
+ fakeFetch(url=>{
+   if(String(url).includes('datasets-server.huggingface.co/filter'))return {data:{
+      partial:false,rows:[{row:{address:root.toLowerCase(),is_scam:1,active_days:30}}]}};
+   throw Error('Unexpected provider');
+ });
+ const result=await request('/research-labels?address='+root);
+ assert.equal(result.status,200);
+ assert.equal(result.json.status,'dataset_match');
+ assert.equal(result.json.label,'historically_labeled_scam');
+ assert.match(result.json.reliability,/NOT proof/);
+});
+test('historical research absence never certifies an address as safe',async()=>{
+ fakeFetch(url=>{
+   if(String(url).includes('datasets-server.huggingface.co/filter'))return {data:{partial:false,rows:[]}};
+   throw Error('Unexpected provider');
+ });
+ const result=await request('/research-labels?address='+root);
+ assert.equal(result.status,200);
+ assert.equal(result.json.status,'not_in_dataset');
+ assert.equal(result.json.label,null);
+ assert.match(result.json.detail,/NOT mean safe/);
+});
+test('historical research provider rate-limits return unavailable, never zero or safe',async()=>{
+ fakeFetch(()=>({status:429,data:{error:'rate limited'}}));
+ const result=await request('/research-labels?address='+root);
+ assert.equal(result.status,200);
+ assert.equal(result.json.status,'unavailable');
+ assert.equal(result.json.issue,'rate_limited');
+});

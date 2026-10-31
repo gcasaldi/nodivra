@@ -210,6 +210,7 @@
       public_attributions:evidenceSnapshot.public_attributions||[],
       linked_entities:evidenceSnapshot.linked_entities||[],
       data_coverage:evidenceSnapshot.source_status||{},
+      historical_research:lastResearch||null,
       note:"Read-only public intelligence. No ownership inference from transaction adjacency. Confirm critical findings using primary sources."};
     const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
     const temp=URL.createObjectURL(blob);
@@ -367,6 +368,7 @@
       network:selectedNetwork,
       subject:flowEvidence.address,
       findings:flowEvidence.investigator_leads||null,
+      historical_research:lastResearch&&lastResearch.address?.toLowerCase()===flowEvidence.address.toLowerCase()?lastResearch:null,
       observed_graph:flowEvidence.graph,
       sources:flowEvidence.osint?.sources||[],
       source_coverage:flowEvidence.coverage,
@@ -681,7 +683,8 @@
   async function searchPublicNames(value){
     const query=String(value||"").trim(),controller=new AbortController();
     if(activeRequest)activeRequest.abort();
-    activeRequest=controller;activeAddress="";evidenceSnapshot=null;flowEvidence=null;
+    activeRequest=controller;activeAddress="";evidenceSnapshot=null;flowEvidence=null;lastResearch=null;
+    $("research-results").hidden=true;
     const box=$("name-results");box.replaceChildren();box.hidden=false;
     $("transaction-result").hidden=true;$("chain-results").hidden=true;results.hidden=true;
     $("trace-leads").hidden=true;$("trace-details").hidden=true;$("case-workspace").hidden=true;
@@ -730,6 +733,42 @@
     }
   }
 
+
+  let lastResearch=null;
+  async function scanResearchHistory(address,controller){
+    const container=$("research-results");
+    if(!container)return;
+    container.hidden=false;container.replaceChildren();
+    container.appendChild(element("span","tiny-label","HISTORICAL RESEARCH · ETHEREUM"));
+    container.appendChild(element("p","minor","Checking a historical research dataset. This is not an identity or criminality check."));
+    try{
+      const found=await fetchJson(API+"/research-labels?address="+encodeURIComponent(address),controller.signal,16000);
+      if(activeRequest!==controller||activeAddress.toLowerCase()!==address.toLowerCase())return;
+      lastResearch=found;
+      container.replaceChildren();
+      const heading=element("div","research-heading");
+      heading.appendChild(element("strong","","Research cross-check"));
+      heading.appendChild(element("span","",found.source_period||"Historical dataset"));
+      container.appendChild(heading);
+      const message=found.status==="dataset_match"?
+        found.label==="historically_labeled_scam"?
+          "Historical dataset label: scam-related research class · UNVERIFIED, NOT PROOF":
+          "Historical dataset label: normal research class · NOT A SAFETY CERTIFICATION":
+        found.status==="not_in_dataset"?
+          "Not in this historical sample · no conclusion about the address":
+        "Dataset currently unavailable or incomplete · no conclusion";
+      container.appendChild(element("p","research-message",message));
+      container.appendChild(element("p","minor",found.detail||"Verify source before drawing any conclusion."));
+      if(found.source?.startsWith("https://"))container.appendChild(link(found.source,"Review original dataset and methodology ↗"));
+      container.appendChild(element("p","research-disclaimer","Dataset labels are historical research annotations, not live alerts, verified owners, or evidence of a crime."));
+    }catch(err){
+      if(activeRequest!==controller)return;
+      container.replaceChildren();
+      container.appendChild(element("p","minor","Research index unavailable. NODIVRA will not guess a classification."));
+      lastResearch={address,status:"unavailable",issue:"gateway_unavailable"};
+    }
+  }
+
   async function lookup(address) {
     if(isPublicNameQuery(address)){await searchPublicNames(address);return;}
     $("name-results").hidden=true;
@@ -740,6 +779,7 @@
       const bitcoinController=new AbortController();
       activeRequest=bitcoinController;activeAddress=String(address).trim();
       input.value=activeAddress;results.hidden=true;
+      lastResearch=null;$("research-results").hidden=true;
       ++investigationSequence;flowEvidence=null;evidenceSnapshot=null;
       $("trace-output").hidden=true;
       $("trace-leads").hidden=true;$("trace-details").hidden=true;$("case-workspace").hidden=true;
@@ -761,6 +801,7 @@
     const controller=new AbortController();activeRequest=controller;
     button.disabled=true;button.textContent="Searching…";
     results.hidden=true;$("origin-result").hidden=true;
+    lastResearch=null;$("research-results").hidden=true;
     evidenceSnapshot=null;
     ++investigationSequence;
     flowEvidence=null;
@@ -778,6 +819,8 @@
       if(activeRequest!==controller)return;
       activeAddress=normalized;
       input.value=normalized;
+      // The HF research query is independent of Blockscout and may work even if the explorer is limited.
+      scanResearchHistory(normalized,controller);
       // Cross-chain scan runs after the primary lookup to reduce API rate-limit spikes.
       $("explorer-link").href=BLOCKSCOUT+normalized;
       $("result-address").textContent=normalized;
