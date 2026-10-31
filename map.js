@@ -199,7 +199,21 @@
     if(!focus)return;
     const layout=positions();
     const rootPane=$("map-svg-host");rootPane.replaceChildren();
-    rootPane.appendChild(makeSvg(layout));
+    if(!busy&&graph.edges.size===0){
+      const empty=el("div","map-outage");
+      empty.appendChild(el("div","tiny-label",lastError?"PROVIDER NOT AVAILABLE":"NO VERIFIED CONNECTIONS RETURNED"));
+      empty.appendChild(el("h4","",lastError?"We couldn't retrieve a verified transaction map":"No indexed transfer links in this sample"));
+      empty.appendChild(el("p","",lastError?
+        "This is a data-source problem, NOT proof that the wallet has no activity. You can check the address in an independent explorer or retry.":
+        "The checked API sample contains no qualifying transfers. This does not establish that the wallet has no history."));
+      const actions=el("div","map-details-actions");
+      const retry=el("button","map-explore-button","Retry source lookup ↻");
+      retry.type="button";retry.addEventListener("click",()=>fetchTrace(focus));
+      actions.appendChild(retry);
+      const explorer=network==="ethereum"?"https://etherscan.io/address/":"https://"+network+".blockscout.com/address/";
+      actions.appendChild(link(explorer+encodeURIComponent(focus),"Verify independently ↗"));
+      empty.appendChild(actions);rootPane.appendChild(empty);
+    }else rootPane.appendChild(makeSvg(layout));
     const total=graph.nodes.size;
     $("map-counter").textContent=layout.visible.length+" visible · "+total+" indexed addresses · "+graph.edges.size+" transfer events";
     $("map-expand").disabled=busy||depth===2;
