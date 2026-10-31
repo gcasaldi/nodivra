@@ -33,6 +33,9 @@ This is the **Evidence-to-Action / Claim Checker** idea. The first **Incident Tr
 
 ## What I've built
 
+- [x] Build an original blue/violet/amber DFIR-style dashboard with compact navigation, real graph counters, network/source-coverage indicators, and an in-browser action feed.
+- [x] Handle complete public-index outages as explicit unavailable results; cache successful graph responses but never cache source outages.
+
 - [x] Open a source-backed EVM transfer map automatically when an address is searched; allow click/keyboard wallet drill-down while preserving previously verified graph edges, breadcrumb navigation, original transaction links and zoom controls.
 - [x] Add an explicit publicly known Ethereum wallet to the smoke-test entry point; distinguish explorer failures from empty graphs.
 - [ ] Validate the full live map against the example wallet, including public API 429s, mobile interactions and a verified multi-wallet drill-down.

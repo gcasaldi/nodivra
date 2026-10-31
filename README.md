@@ -25,3 +25,8 @@ NODIVRA is **not** a way to magically reveal who owns an anonymous wallet. If th
 I’d love to build this with others. If you work with blockchain, OSINT, cybersecurity or data visualization, feel free to open an issue or share an idea.
 
 *Status: public beta. The first investigation tools are implemented, but live-browser testing, provider reliability and deeper cross-chain tracing still need work.*
+
+
+## Investigation console (2026-10-31)
+
+I reviewed Velociraptor's GUI approach as a reference for a practical, information-dense DFIR workspace: navigation, status tiles, focused operational views and a case-oriented activity log. NODIVRA's new navy/blue/purple/amber dashboard is an **original UI**, not a bundled Velociraptor copy. Velociraptor is a separate endpoint forensics system, not a blockchain indexer; its AGPLv3 source, VQL engine, client collectors and backend were **not imported**. See [design decision](docs/VELOCIRAPTOR-REFERENCE.md).

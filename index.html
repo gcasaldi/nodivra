@@ -7,12 +7,12 @@
   <meta name="keywords" content="blockchain intelligence,crypto forensics,wallet analysis,OSINT,threat intelligence,ethereum,open source">
   <meta property="og:title" content="NODIVRA — Blockchain Intelligence">
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
-  <meta name="theme-color" content="#07131a">
+  <meta name="theme-color" content="#0e1421">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261031-provider-v5">
-  <script src="modules.js?v=20261031-provider-v5" defer></script>
-  <script src="map.js?v=20261031-provider-v5" defer></script>
-  <script src="app.js?v=20261031-provider-v5" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261031-console-v1">
+  <script src="modules.js?v=20261031-console-v1" defer></script>
+  <script src="map.js?v=20261031-console-v1" defer></script>
+  <script src="app.js?v=20261031-console-v1" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -28,12 +28,24 @@
   <main>
     <section class="hero wrap" id="mission">
       <div class="eyebrow"><span class="live-dot"></span> OPEN-SOURCE BLOCKCHAIN INTELLIGENCE <span class="version">/ BETA</span></div>
-      <h1>From evidence to action<span class="accent">.</span></h1>
-      <p class="lead">Enter a wallet. Explore its on-chain connections on an interactive map, drill into each address and verify every transaction. Five modules, one investigation.</p>
+      <h1>Blockchain investigation<span class="accent">.</span></h1>
+      <p class="lead">A practical, evidence-first workspace for crypto incident response. Search, inspect the graph and follow the next verification step.</p>
     </section>
     <section class="workspace wrap" id="explore" aria-labelledby="explore-title">
-      <div class="section-head"><div><h2 id="explore-title">Explore a wallet or investigate an incident</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
+      <div class="section-head"><div><h2 id="explore-title">Investigation workspace</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
       <div class="panel">
+        <section class="command-deck" aria-label="Current investigation status">
+          <div class="command-heading"><div><span class="command-kicker">GJ917 / NODIVRA / WORKSPACE</span><h3>Investigation dashboard</h3>
+            <p>Verified on-chain observations first. No guesswork, no fabricated links.</p></div>
+            <span class="command-live" id="ops-activity-status"><span class="command-signal" aria-hidden="true"></span> READY</span>
+          </div>
+          <div class="command-stats">
+            <div class="command-stat stat-blue"><span class="stat-icon" aria-hidden="true">◈</span><span class="stat-title">TRANSFER EVIDENCE</span><strong id="ops-transfers">—</strong><small>Source-linked events</small></div>
+            <div class="command-stat stat-violet"><span class="stat-icon" aria-hidden="true">⬡</span><span class="stat-title">WALLETS IN VIEW</span><strong id="ops-wallets">—</strong><small>Observed addresses only</small></div>
+            <div class="command-stat stat-amber"><span class="stat-icon" aria-hidden="true">◆</span><span class="stat-title">DATA COVERAGE</span><strong id="ops-coverage">Not checked</strong><small>Public index status</small></div>
+            <div class="command-stat stat-cyan"><span class="stat-icon" aria-hidden="true">◉</span><span class="stat-title">ACTIVE NETWORK</span><strong id="ops-network">—</strong><small>One chain per map</small></div>
+          </div>
+        </section>
         <form id="lookup-form" novalidate>
           <label for="wallet">Wallet, transaction hash or name</label>
           <div class="input-row">
@@ -200,6 +212,9 @@
             <div id="module-report-body"></div>
           </section>
         </div>
+        <details class="ops-log"><summary><span class="log-dot"></span> Investigation activity <span class="log-caption">This browser session only</span></summary>
+          <ol id="ops-feed" class="ops-feed" aria-label="Investigation actions"></ol>
+        </details>
       </div>
     </section>
     <section class="join wrap" aria-label="Collaborate">

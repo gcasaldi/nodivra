@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const VALID=/^0x[a-fA-F0-9]{40}$/;
   const API="https://nodivra-api.gcasaldi.workers.dev";
-  const COLORS={subject:"#83f7c7",tagged:"#d9b77d",normal:"#82b8d1"};
+  const COLORS={subject:"#63a9ff",tagged:"#f7bb73",normal:"#af9cf9"};
   const graph={nodes:new Map(),edges:new Map()};
   let root="",focus="",network="ethereum",depth=1,history=[],controller=null,serial=0;
   let busy=false,zoom=1,onReport=()=>{},onClear=()=>{},lastError="";
@@ -17,9 +17,29 @@
   const link=(url,title)=>{
     const a=el("a","",title);a.href=url;a.target="_blank";a.rel="noopener noreferrer";return a;
   };
+  function recordAction(message){
+    const list=$("ops-feed");if(!list)return;
+    const entry=el("li");
+    const time=el("time","",new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}));
+    entry.appendChild(time);entry.appendChild(document.createTextNode(message));
+    list.prepend(entry);
+    while(list.children.length>12)list.lastElementChild.remove();
+  }
+  function dashboard(status){
+    const transfers=$("ops-transfers"),wallets=$("ops-wallets");
+    if(transfers)transfers.textContent=root?String(graph.edges.size):"—";
+    if(wallets)wallets.textContent=root?String(graph.nodes.size):"—";
+    const chain=$("ops-network");if(chain)chain.textContent=root?network.toUpperCase():"—";
+    const coverage=$("ops-coverage");if(coverage)coverage.textContent=status||"Not checked";
+  }
   function state(text,isError=false){
-    const e=$("map-status");if(!e)return;
-    e.textContent=text;e.classList.toggle("error",isError);
+    const e=$("map-status");if(e){e.textContent=text;e.classList.toggle("error",isError);}
+    const indicator=$("ops-activity-status");
+    if(indicator){
+      indicator.classList.toggle("is-offline",isError);
+      indicator.classList.toggle("is-loading",busy&&!isError);
+      indicator.lastChild.textContent=isError?" SOURCE ISSUE":busy?" LOADING":" READY";
+    }
   }
   function clear(){
     if(controller)controller.abort();
@@ -35,6 +55,7 @@
     $("map-back").disabled=true;
     $("map-expand").disabled=false;
     $("map-expand").textContent="Expand 2 hops";
+    dashboard("Not checked");
     state("Enter an EVM address to load an evidence map.");
   }
   function edgeKey(edge){
@@ -102,7 +123,7 @@
     const defs=svgEl("defs");
     const marker=svgEl("marker",{id:"wallet-map-arrow",viewBox:"0 0 10 10",refX:"9",refY:"5",
       markerWidth:"6",markerHeight:"6",orient:"auto"});
-    marker.appendChild(svgEl("path",{d:"M0 0L10 5L0 10Z",fill:"#69beaf"}));
+    marker.appendChild(svgEl("path",{d:"M0 0L10 5L0 10Z",fill:"#6caaff"}));
     defs.appendChild(marker);svg.appendChild(defs);
     const observedEdges=[...graph.edges.values()].filter(e=>layout.xy.has(e.from.toLowerCase())&&layout.xy.has(e.to.toLowerCase()));
     const pairs=new Set();
@@ -113,7 +134,7 @@
       const midX=(from.x+to.x)/2,midY=(from.y+to.y)/2;
       const bend=from.x===to.x?60:0;
       const path=svgEl("path",{d:"M"+from.x+" "+from.y+" Q"+(midX+bend)+" "+(midY-18)+" "+to.x+" "+to.y,
-        fill:"none",stroke:"#69beaf","stroke-width":"2","stroke-opacity":".73",
+        fill:"none",stroke:"#6caaff","stroke-width":"2","stroke-opacity":".73",
         "marker-end":"url(#wallet-map-arrow)"});
       const tip=svgEl("title");tip.textContent="Observed "+edge.asset+" transaction "+edge.tx_hash;
       path.appendChild(tip);svg.appendChild(path);
@@ -124,7 +145,7 @@
         "aria-label":"Inspect "+n.address+(tagged?" — public label, verify independently":"")});
       g.classList.add("wallet-map-node");
       const rectangle=svgEl("rect",{x:"-116",y:"-31",width:"232",height:"62",rx:"11",
-        fill:selected?"#125142":tagged?"#403326":"#122c36",
+        fill:selected?"#223e71":tagged?"#503b34":"#282948",
         stroke:selected?COLORS.subject:tagged?COLORS.tagged:COLORS.normal,
         "stroke-width":selected?3:1.5});
       g.appendChild(rectangle);
@@ -135,7 +156,7 @@
       title.textContent=typeof publicName==="string"&&publicName.length?publicName.slice(0,27):short(n.address);
       g.appendChild(title);
       const description=svgEl("text",{x:"0",y:"14","text-anchor":"middle",
-        fill:selected?"#90f3c4":"#9cbbb3","font-size":"10"});
+        fill:selected?"#9dc4ff":"#9cbbb3","font-size":"10"});
       description.textContent=selected?"SELECTED · DRILL DOWN":tagged?"PUBLIC TAG · UNVERIFIED":"ADDRESS · OWNER UNKNOWN";
       g.appendChild(description);
       const tip=svgEl("title");tip.textContent=n.address;g.appendChild(tip);
@@ -229,6 +250,7 @@
       crumbs.appendChild(part);
     }
     incidentDetails(focus);
+    dashboard(lastError?"Limited":busy?"Loading":graph.edges.size?"Indexed":"No sampled links");
   }
   function setLoading(v){
     busy=v;
@@ -250,8 +272,16 @@
       const report=await response.json();
       if(ticket!==serial)return;
       if(!report?.graph||!Array.isArray(report.graph.edges)||report.address?.toLowerCase()!==address.toLowerCase())throw Error("Unexpected or incomplete evidence response");
+      if(report.coverage?.data_status==="unavailable"){
+        lastError="Both public transaction indexers are temporarily unavailable. No wallet-activity conclusion can be drawn.";
+        window.NodivraModules.complete("graph_failed");
+        state("Source temporarily unavailable · no verified transfer history loaded. Retry later or use an independent explorer.",true);
+        recordAction("Transaction indexes unavailable for "+short(address)+"; no transfer conclusions.");
+        return;
+      }
       merge(report);
       onReport(report);
+      recordAction("Indexed "+(report.stats?.transfers??report.graph.edges.length)+" transfer(s) around "+short(address)+".");
       const observed=report.stats?.transfers??report.graph.edges.length;
       const partial=report.coverage?.partial;
       const provider=report.coverage?.primary_source||"public index";
@@ -264,6 +294,7 @@
       lastError="Could not verify additional transfers for this wallet: "+(err?.message||"provider unavailable")+
         ". Existing lines, if any, come from previous source-linked transaction samples; no new links were inferred.";
       state(lastError,true);
+      recordAction("Source issue: "+short(address)+" · no new evidence added.");
     }finally{
       if(ticket===serial){setLoading(false);paint();}
     }
@@ -314,6 +345,7 @@
         source_url:source+"/tx/"+tx.transaction_hash});
     }
     if(count){
+      recordAction("Ethereum wallet lookup added "+count+" confirmed indexed event(s).");
       window.NodivraModules.complete("graph_fallback");
       if(!busy)state("Map supplemented with "+count+" source-linked event(s) from a recent Ethereum wallet lookup. Data may be partial.");
       paint();
@@ -346,6 +378,7 @@
       else if(match>=0)history=history.slice(0,match);
     }else history.push(focus);
     focus=address;
+    recordAction("Drill-down: "+short(address));
     paint();
     fetchTrace(address);
   }
@@ -364,6 +397,7 @@
     $("module-empty-connect").hidden=true;
     window.NodivraModules.complete("graph_loading");
     window.NodivraModules.open("connect");
+    recordAction("Investigation opened: "+short(address)+" · "+network);
     state("Building your map from public transaction evidence…");
     paint();
     fetchTrace(address);
