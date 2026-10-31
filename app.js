@@ -2,6 +2,7 @@
 (() => {
   const API = "https://nodivra-api.gcasaldi.workers.dev";
   const Modules = window.NodivraModules;
+  const WalletMap = window.NodivraMap;
   const DIRECT = "https://eth.blockscout.com/api/v2";
   const ETHERSCAN = "https://etherscan.io/address/";
   const BLOCKSCOUT = "https://eth.blockscout.com/address/";
@@ -895,6 +896,7 @@
   }
 
   async function lookup(address) {
+    WalletMap.reset();
     Modules.reset(isPublicNameQuery(address)?"name":"wallet");
     if(isPublicNameQuery(address)){await searchPublicNames(address);return;}
     $("name-results").hidden=true;
@@ -945,6 +947,9 @@
       if(activeRequest!==controller)return;
       activeAddress=normalized;
       input.value=normalized;
+      // Open the map immediately: the graph works independently from the wallet balance/index lookup.
+      WalletMap.start(normalized);
+      Modules.complete("graph_loading",null);
       // The HF research query is independent of Blockscout and may work even if the explorer is limited.
       scanResearchHistory(normalized,controller);
       // Cross-chain scan runs after the primary lookup to reduce API rate-limit spikes.
@@ -1031,8 +1036,23 @@
       box.replaceChildren();box.appendChild(element("p","minor","Origin scan unavailable: "+e.message+". Recent evidence above remains accessible."));
     }finally{originBtn.disabled=false;originBtn.textContent="Trace earliest funding →";}
   }
+  WalletMap.onReport(report=>{
+    // Each map drill-down produces a trace report for the currently selected wallet.
+    // This is NOT evidence that the same funds moved through every explored address.
+    flowEvidence=report;
+    renderInvestigationLeads(report);
+    renderFlowGraph(report);
+    Modules.complete("trace",report);
+    $("trace-details").hidden=false;
+    $("case-workspace").hidden=false;
+    $("trace-details").open=false;
+    $("case-workspace").open=false;
+    $("trace-network").value=report.network_id||"ethereum";
+    $("trace-direction").value="both";
+    $("trace-depth").value=String(report.mode?.depth_requested||1);
+  });
   form.addEventListener("submit",e=>{e.preventDefault();lookup(input.value);});
-  $("example").addEventListener("click",()=>lookup("0xe4bee4633e263bed39ad812b2c8078fb7328c052c64f62903993074d20702fb2"));
+  $("example").addEventListener("click",()=>lookup("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
   originBtn.addEventListener("click",traceOrigin);
   $("trace-button").addEventListener("click",runInvestigation);
   $("case-report").addEventListener("click",exportCaseDossier);

@@ -9,9 +9,10 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261031-modular-v1">
-  <script src="modules.js?v=20261031-modular-v1" defer></script>
-  <script src="app.js?v=20261031-modular-v1" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261031-graph-v1">
+  <script src="modules.js?v=20261031-graph-v1" defer></script>
+  <script src="map.js?v=20261031-graph-v1" defer></script>
+  <script src="app.js?v=20261031-graph-v1" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -28,10 +29,10 @@
     <section class="hero wrap" id="mission">
       <div class="eyebrow"><span class="live-dot"></span> OPEN-SOURCE BLOCKCHAIN INTELLIGENCE <span class="version">/ BETA</span></div>
       <h1>From evidence to action<span class="accent">.</span></h1>
-      <p class="lead">Five modules. One investigation. Verify transactions, correlate public data, follow connections, prioritize checks and export evidence.</p>
+      <p class="lead">Enter a wallet. Explore its on-chain connections on an interactive map, drill into each address and verify every transaction. Five modules, one investigation.</p>
     </section>
     <section class="workspace wrap" id="explore" aria-labelledby="explore-title">
-      <div class="section-head"><div><h2 id="explore-title">Investigate an incident</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
+      <div class="section-head"><div><h2 id="explore-title">Explore a wallet or investigate an incident</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
       <div class="panel">
         <form id="lookup-form" novalidate>
           <label for="wallet">Wallet, transaction hash or name</label>
@@ -39,7 +40,7 @@
             <input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Transaction hash, wallet or ENS name" aria-describedby="wallet-help" maxlength="260" required>
             <button id="lookup-button" class="button primary" type="submit">Search <span aria-hidden="true">→</span></button>
           </div>
-          <div class="form-foot"><span id="wallet-help">Public ENS name search · EVM · Bitcoin · Solana</span><button class="text-button" type="button" id="example">Try a public transaction ↗</button></div>
+          <div class="form-foot"><span id="wallet-help">EVM transaction map · Bitcoin/Solana snapshots · public name search</span><button class="text-button" type="button" id="example">Try a real wallet on the map ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Paste a wallet address, ENS name, or EVM transaction hash.</p>
         <nav class="module-tabs" aria-label="Investigation workflow" role="tablist">
@@ -134,8 +135,43 @@
             <div class="module-intro"><span class="module-eyebrow">03 · MAP OBSERVED RELATIONSHIPS</span><h3>Connect</h3>
               <p>Follow indexed transfers and inspect the original transaction evidence. A transaction link is not proof of common wallet ownership.</p>
               <span class="module-scope">EVM wallet trace up to 2 hops · No verified BTC/Solana fund-flow tracing yet</span></div>
-            <p id="module-empty-connect" class="module-empty">For an EVM wallet, use Trace below. For an EVM transaction, this section will show observed transfer links. BTC/Solana graph tracing is not yet available.</p>
+            <p id="module-empty-connect" class="module-empty">Search an EVM wallet and the interactive graph opens automatically. Bitcoin/Solana tracing remains limited to address snapshots.</p>
             <div id="incident-connect-content" hidden></div>
+            <section class="wallet-map" id="wallet-map" aria-label="Interactive blockchain transaction map" hidden>
+              <div class="map-toolbar">
+                <div><span class="module-eyebrow">LIVE EVIDENCE GRAPH · INVESTIGATIVE BETA</span>
+                  <h4>Wallet relationship map</h4>
+                  <p>Tap any wallet to expand its observed transfer connections. Every line links to a public transaction.</p>
+                </div>
+                <div class="map-toolbar-controls">
+                  <label for="map-network">Blockchain<select id="map-network">
+                    <option value="ethereum">Ethereum</option><option value="base">Base</option>
+                    <option value="arbitrum">Arbitrum</option><option value="optimism">Optimism</option>
+                    <option value="polygon">Polygon</option></select></label>
+                  <button id="map-back" type="button" class="map-small-button" disabled>← Back</button>
+                  <button id="map-home" type="button" class="map-small-button">Starting wallet</button>
+                  <button id="map-expand" type="button" class="map-small-button">Expand 2 hops</button>
+                </div>
+              </div>
+              <div id="map-status" class="map-status" role="status" aria-live="polite">Enter a wallet to load its connections.</div>
+              <div id="map-history" class="map-history" aria-label="Wallet drill-down navigation"></div>
+              <div class="map-surface">
+                <div class="map-main">
+                  <div class="map-canvas-bar"><span>🟢 Selected · 🟡 Public tag (unverified) · 🔵 Other address</span>
+                    <div class="map-zoom" aria-label="Zoom controls">
+                      <button type="button" id="map-zoom-out" aria-label="Zoom out">−</button>
+                      <button type="button" id="map-fit">Fit</button>
+                      <button type="button" id="map-zoom-in" aria-label="Zoom in">+</button>
+                    </div>
+                  </div>
+                  <div id="map-svg-host" class="map-svg-host" tabindex="0" aria-label="Scrollable interactive graph"></div>
+                  <p id="map-counter" class="map-counter">No observed links yet</p>
+                </div>
+                <aside id="map-inspector" class="map-inspector" aria-label="Selected wallet details"></aside>
+              </div>
+              <div id="map-related" class="map-related" aria-label="Verifiable transfer evidence"></div>
+              <p class="map-scope-note">Observed transfers are not proof of ownership or that the same funds continued through a transaction. Network queries are bounded and may be incomplete. Bitcoin and Solana wallet snapshots do not yet support this drill-down map.</p>
+            </section>
             <div id="module-connect-body"></div>
             <div class="module-next"><span>Next: choose the first useful verification.</span><button type="button" class="module-next-btn" data-next-module="recommend">Go to RECOMMEND →</button></div>
           </section>

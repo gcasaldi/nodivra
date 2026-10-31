@@ -6,6 +6,8 @@ I started NODIVRA because I kept seeing wallet addresses in crypto investigation
 
 I wanted one place to start: start with a public name, an ENS alias, an address or an EVM transaction hash, see what can actually be verified, follow the transfers, check the public labels, and keep track of what I can *actually* verify.
 
+**Graph-first wallet investigation:** searching an EVM address opens the **CONNECT map automatically**. Each clickable address expands an independently indexed, source-linked set of transfers. The map has a breadcrumb/back path, 1-to-2-hop expansion, chain selector, zoom, clipboard and a readable evidence list for keyboard/touch users. It never assumes transaction adjacency proves common ownership or fund continuity. The publicly labeled sample wallet `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` is our explicit smoke-test case. Real provider coverage and rate limits still need independent checking.
+
 The interface is split into five clear modules — **INVESTIGATE, CORRELATE, CONNECT, RECOMMEND, REPORT**. Each module shows the observations the beta actually supports, and distinguishes unavailable functions from verified evidence. The modular UI changes the analyst workflow; it does not claim unsupported Bitcoin/Solana or cross-chain transaction tracing.
 
 The **Incident Triage beta** starts from an EVM transaction hash, checks whether execution succeeded, examines the original native/ERC-20 transfers, and looks for chronologically later same-asset transactions in a bounded sample. It recommends the first source-backed verification step and exports a short report. This is not proof of fund continuity or wallet ownership.

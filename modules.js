@@ -22,7 +22,14 @@
   move("advanced-evidence","module-correlate-body");
   const trace=document.querySelector(".investigation-panel");
   if(!trace)throw new Error("The existing trace module is missing");
-  $("module-connect-body").appendChild(trace);
+  const advanced=document.createElement("details");
+  advanced.id="advanced-trace-workflow";
+  advanced.className="case-details";
+  const heading=document.createElement("summary");
+  heading.textContent="Advanced wallet trace controls · direction / depth ↗";
+  advanced.appendChild(heading);
+  advanced.appendChild(trace);
+  $("module-connect-body").appendChild(advanced);
   move("trace-leads","module-recommend-body");
   move("case-workspace","module-report-body");
   $("advanced-evidence").hidden=true;
@@ -82,7 +89,11 @@
     update();
   }
   function complete(type,data){
-    if(type==="incident"){
+    if(type==="graph_loading"){
+      state.connect="Building map";setEmpty("connect",false);
+    }else if(type==="graph_failed"){
+      state.connect="Source unavailable";setEmpty("connect",false);
+    }else if(type==="incident"){
       scenario="incident";
       state.investigate="Verified source";
       state.correlate="Source review";

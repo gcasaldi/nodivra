@@ -33,6 +33,10 @@ This is the **Evidence-to-Action / Claim Checker** idea. The first **Incident Tr
 
 ## What I've built
 
+- [x] Open a source-backed EVM transfer map automatically when an address is searched; allow click/keyboard wallet drill-down while preserving previously verified graph edges, breadcrumb navigation, original transaction links and zoom controls.
+- [x] Add an explicit publicly known Ethereum wallet to the smoke-test entry point; distinguish explorer failures from empty graphs.
+- [ ] Validate the full live map against the example wallet, including public API 429s, mobile interactions and a verified multi-wallet drill-down.
+
 - [x] Organize the web app into five accessible investigator modules, reusing the existing data, graph, decision and export features without inventing missing network coverage.
 
 - [x] Implement initial EVM incident triage from a transaction hash, with successful execution checks, ERC-20 and native event extraction, and bounded later same-asset observations.
