@@ -513,17 +513,85 @@ function extractEvidence(root,txs,tokens,network,direction){
  }
  return result.sort((a,b)=>String(b.timestamp||"").localeCompare(String(a.timestamp||""))).slice(0,TRACE_LIMITS.per_page);
 }
+// Secondary index: Routescan's keyless Etherscan-compatible API (2 req/s free tier).
+// These are verified external transfer records, never inferred links or user identities.
+// "No transactions found" is a distinct valid response; provider failures are not.
+const ROUTESCAN="https://api.routescan.io/v2/network/mainnet/evm/";
+function routescanTxUrl(network,action,address) {
+ const query=new URLSearchParams({module:"account",action,address,startblock:"0",endblock:"99999999",
+   page:"1",offset:"25",sort:"desc"});
+ return ROUTESCAN+network.chain_id+"/etherscan/api?"+query;
+}
+async function routescanRows(network,action,address){
+ const url=routescanTxUrl(network,action,address);
+ const json=await networkRequest("",url,9000);
+ if(Array.isArray(json?.result)&&json.status==="1")return json.result;
+ if(json.status==="0"&&Array.isArray(json.result)&&json.result.length===0)return [];
+ if(json.status==="0"&&/no transactions found/i.test(String(json.message||json.result||"")))return [];
+ throw Error("Routescan "+action+" "+String(json?.message||"unavailable").slice(0,95));
+}
+function parseRoutescanTx(row,network){
+ const hash=row.hash,from=row.from,to=row.to;
+ if(!/^0x[a-fA-F0-9]{64}$/.test(hash||"")||!ADDRESS.test(from||"")||!ADDRESS.test(to||""))return null;
+ if(!/^\d+$/.test(String(row.value||""))||row.isError==="1"||row.txreceipt_status==="0")return null;
+ const when=Number(row.timeStamp),block=Number(row.blockNumber);
+ if(!Number.isSafeInteger(when)||when<1||!Number.isSafeInteger(block)||block<1)return null;
+ return {hash,from:{hash:from},to:{hash:to},status:"ok",value:row.value,
+   timestamp:new Date(when*1000).toISOString(),block};
+}
+function parseRoutescanToken(row){
+ if(!ADDRESS.test(row.from||"")||!ADDRESS.test(row.to||"")||!ADDRESS.test(row.contractAddress||"")||
+     !/^0x[a-fA-F0-9]{64}$/.test(row.hash||"")||!/^\d+$/.test(String(row.value??""))||
+     row.isError==="1"||row.txreceipt_status==="0")return null;
+ const decimals=Number(row.tokenDecimal),when=Number(row.timeStamp),block=Number(row.blockNumber);
+ if(!Number.isSafeInteger(decimals)||decimals<0||decimals>36||
+     !Number.isSafeInteger(when)||when<1||!Number.isSafeInteger(block)||block<1)return null;
+ return {from:{hash:row.from},to:{hash:row.to},transaction_hash:row.hash,
+   timestamp:new Date(when*1000).toISOString(),block_number:block,
+   token_type:"ERC-20",token:{type:"ERC-20",address_hash:row.contractAddress,
+     decimals:String(decimals),symbol:String(row.tokenSymbol||"ERC-20").slice(0,24)},
+   total:{value:row.value},log_index:row.logIndex??null};
+}
+async function routescanTracePage(address,network,direction){
+ const failures=[];
+ const load=async(action,convert)=>{
+   try{
+     const rows=await routescanRows(network,action,address);
+     return rows.map(row=>convert(row,network)).filter(Boolean).filter(item=>{
+       const from=typeof item.from==="string"?item.from:item.from?.hash;
+       const to=typeof item.to==="string"?item.to:item.to?.hash;
+       return direction==="in"?to?.toLowerCase()===address.toLowerCase():
+         direction==="out"?from?.toLowerCase()===address.toLowerCase():true;
+     });
+   }catch(e){failures.push(action+": "+e.message);return null;}
+ };
+ // Sequential to respect Routescan keyless 2 request/sec budget as closely as practical.
+ const native=await load("txlist",parseRoutescanTx);
+ await new Promise(r=>setTimeout(r,600));
+ const tokens=await load("tokentx",parseRoutescanToken);
+ if(native===null&&tokens===null)return null;
+ return {edges:extractEvidence(address,native,tokens,network,direction),
+   status:{native:native===null?"unavailable":"ok",token:tokens===null?"unavailable":"ok"},
+   providers:{native:native===null?"unavailable":"routescan",token:tokens===null?"unavailable":"routescan"},
+   warnings:failures,source:"Routescan Etherscan-compatible API"};
+}
 async function tracePage(address,network,direction){
  const base=network.explorer+"/api/v2/addresses/"+encodeURIComponent(address);
  const filter=direction==="in"?"?filter=to":direction==="out"?"?filter=from":"";
- const outcomes=await Promise.allSettled([
-  networkRequest("",base+"/transactions"+filter,6800),
-  networkRequest("",base+"/token-transfers"+filter,6800)
+ const results=await Promise.allSettled([
+   networkRequest("",base+"/transactions"+filter,4500),
+   networkRequest("",base+"/token-transfers"+filter,4500)
  ]);
- const native=outcomes[0].status==="fulfilled"&&Array.isArray(outcomes[0].value?.items)?outcomes[0].value.items:null;
- const tokens=outcomes[1].status==="fulfilled"&&Array.isArray(outcomes[1].value?.items)?outcomes[1].value.items:null;
- const status={native:native===null?"unavailable":"ok",token:tokens===null?"unavailable":"ok"};
- return {edges:extractEvidence(address,native,tokens,network,direction),status};
+ const native=results[0].status==="fulfilled"&&Array.isArray(results[0].value?.items)?results[0].value.items:null;
+ const tokens=results[1].status==="fulfilled"&&Array.isArray(results[1].value?.items)?results[1].value.items:null;
+ if(native===null&&tokens===null){
+   const alternative=await routescanTracePage(address,network,direction);
+   if(alternative)return alternative;
+ }
+ return {edges:extractEvidence(address,native,tokens,network,direction),
+   status:{native:native===null?"unavailable":"ok",token:tokens===null?"unavailable":"ok"},
+   providers:{native:native===null?"unavailable":"blockscout",token:tokens===null?"unavailable":"blockscout"},
+   warnings:[],source:"Blockscout API v2"};
 }
 function traceNode(address,hop,viaTx){
  return {address,hop,via_transaction:viaTx||null,entity_type:"unknown",labels:[],owner_status:"unknown",
@@ -652,7 +720,7 @@ async function investigateFlows(address,options) {
  const rootPeers=edges.map(e=>e.from.toLowerCase()===address.toLowerCase()?e.to:e.from);
  const peerCount=new Map();
  for(const peer of rootPeers)if(peer.toLowerCase()!==address.toLowerCase())peerCount.set(peer.toLowerCase(),(peerCount.get(peer.toLowerCase())||0)+1);
- const candidates=[...peerCount].sort((a,b)=>b[1]-a[1]).slice(0,TRACE_LIMITS.max_peers).map(([a])=>a);
+ const candidates=[...peerCount].sort((a,b)=>b[1]-a[1]).slice(0,root.source.startsWith("Routescan")?1:TRACE_LIMITS.max_peers).map(([a])=>a);
  const expanded=[];
  if(depth===2&&candidates.length) {
   const results=await Promise.allSettled(candidates.map(peer=>tracePage(peer,chain,direction)));
@@ -673,7 +741,7 @@ async function investigateFlows(address,options) {
  }
  // Enrich just the subject and first-hop peers; avoid uncontrolled OSINT API fanout.
  const primary=[address.toLowerCase(),...candidates].filter((v,i,a)=>a.indexOf(v)===i);
- await Promise.allSettled(primary.map(id=>traceEnrich(nodes.get(id),chain)));
+ if(!root.source.startsWith("Routescan"))await Promise.allSettled(primary.slice(0,2).map(id=>traceEnrich(nodes.get(id),chain)));
  const finalNodes=[...nodes.values()];
  const investigator_leads=buildActionableLeads(address,finalNodes,edges,chain);
  const sources=[{name:"Blockscout public indexed transfers",url:chain.explorer+"/address/"+address,
@@ -691,7 +759,7 @@ async function investigateFlows(address,options) {
   queried_at:new Date().toISOString(),mode:{direction,depth_requested:depth,depth_achieved:edges.some(e=>e.hop===2)?2:edges.length?1:0},
   graph:{nodes:finalNodes,edges},investigator_leads,stats:{nodes:finalNodes.length,transfers:edges.length,entities_with_public_labels:attributed.length,
    risk_flags_reported_by_explorer:flags.length,expanded_peers:expanded.length,observed_counterparties:observedCounterparties,source_warnings:issueCount,publicly_tagged_entities:publicEntities},
-  coverage:{root:root.status,expanded,problems,partial:issueCount>0,has_observed_transfers:edges.length>0,limit:TRACE_LIMITS,
+  coverage:{root:root.status,primary_source:root.source,primary_providers:root.providers,expanded,problems,partial:issueCount>0,has_observed_transfers:edges.length>0,limit:TRACE_LIMITS,
    sample:"At most one recent API page per visited address. Depth 2; max four first-hop peers and three second-hop links each. Token and native transfers are distinct evidence types."},
   osint:{public_labels:attributed.map(n=>({address:n.address,labels:n.labels})),sources},
   conclusions:[
@@ -942,7 +1010,7 @@ export default {
   if(request.method!=="GET")return reply(request,{error:"Read-only API"},405);
   const u=new URL(request.url),path=u.pathname;
   // Cache public lookups at the edge so retries and repeated searches do not hammer upstream indexers.
-  const cacheable=new Set(["/lookup","/resolve","/multichain","/name-search","/research-labels"]);
+  const cacheable=new Set(["/lookup","/resolve","/multichain","/name-search","/research-labels","/investigate"]);
   const cache=typeof caches!=="undefined"&&caches?.default?caches.default:null;
   if(cacheable.has(path)&&cache){
     try {const hit=await cache.match(request);if(hit)return hit;}catch(e){}
@@ -950,7 +1018,7 @@ export default {
   const send=(data,status=200)=>{
     const response=reply(request,data,status);
     if(status===200&&cacheable.has(path)&&cache){
-      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:path==="/research-labels"?3600:180));
+      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:path==="/research-labels"?3600:path==="/investigate"?600:180));
       try {
         const task=cache.put(request,response.clone());
         if(context?.waitUntil)context.waitUntil(task);else task.catch(()=>{});
@@ -958,7 +1026,7 @@ export default {
     }
     return response;
   };
-  if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
+  if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","Routescan (secondary index)","PublicNode","dRPC","eth-labels"]});
   if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search","/research-labels","/incident"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/name-search")return send(await discoverPublicEnsNames(u.searchParams.get("q")));

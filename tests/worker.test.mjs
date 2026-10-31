@@ -249,3 +249,44 @@ test('incident follow-up rejects pre-incident transfers and other ERC-20 contrac
  assert.equal(r.json.later_observed_events.length,0);
  assert.equal(r.json.first_next_action.basis,'incomplete_recent_sample');
 });
+
+test('Routescan keyless fallback returns true source-linked graph when Blockscout rate-limits',async()=>{
+ const A=root,B=parent;
+ fakeFetch(url=>{
+   const u=String(url);
+   if(u.includes('blockscout.com/api/v2/addresses/'))return {status:429,data:{}};
+   if(u.includes('api.routescan.io')&&u.includes('action=txlist'))return {data:{status:'1',message:'OK',result:[{
+     hash:hash('8'),from:A,to:B,value:'1230000000000000000',
+     blockNumber:'25000001',timeStamp:'1793460000',isError:'0',txreceipt_status:'1'
+   }]}};
+   if(u.includes('api.routescan.io')&&u.includes('action=tokentx'))return {data:{status:'0',message:'No transactions found',result:[]}};
+   throw Error('Unexpected '+u);
+ });
+ const r=await request('/investigate?address='+root+'&network=ethereum&depth=1&direction=both');
+ assert.equal(r.status,200);
+ assert.equal(r.json.coverage.primary_source,'Routescan Etherscan-compatible API');
+ assert.equal(r.json.graph.edges.length,1);
+ assert.equal(r.json.graph.edges[0].source_url,'https://eth.blockscout.com/tx/'+hash('8'));
+ assert.equal(r.json.graph.edges[0].from,root);
+});
+test('Routescan fallback rejects failed transaction rather than adding a fake transfer',async()=>{
+ fakeFetch(url=>{
+   const u=String(url);
+   if(u.includes('blockscout.com/api/v2/addresses/'))return {status:429,data:{}};
+   if(u.includes('api.routescan.io')&&u.includes('action=txlist'))return {data:{status:'1',message:'OK',result:[{
+     hash:hash('8'),from:root,to:parent,value:'1230000000000000000',blockNumber:'25000001',
+     timeStamp:'1793460000',isError:'1',txreceipt_status:'0'
+   }]}};
+   if(u.includes('api.routescan.io')&&u.includes('action=tokentx'))return {data:{status:'0',message:'No transactions found',result:[]}};
+   throw Error('Unexpected '+u);
+ });
+ const r=await request('/investigate?address='+root+'&network=ethereum&depth=1');
+ assert.equal(r.status,200);
+ assert.equal(r.json.graph.edges.length,0);
+});
+test('Routescan error response is not mistaken for a valid empty wallet',async()=>{
+ fakeFetch(url=>String(url).includes('blockscout.com')?{status:429,data:{}}:
+   {data:{status:'0',message:'NOTOK',result:'Max rate limit reached'}});
+ const r=await request('/investigate?address='+root+'&network=ethereum&depth=1');
+ assert.equal(r.status,503);
+});
