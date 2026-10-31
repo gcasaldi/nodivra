@@ -965,6 +965,7 @@
       $("account-type").textContent=account.is_contract===true?"Contract":account.is_contract===false?"EOA (technical type)":"Unverified";
       $("coverage").textContent=provider+" · recent activity";
       evidenceSnapshot=data;
+      WalletMap.ingestWalletSample(normalized,data);
       intelligenceBrief(data,normalized);
       const summary=$("brief-summary");
       const labels=Array.isArray(data.public_attributions)?data.public_attributions:[];

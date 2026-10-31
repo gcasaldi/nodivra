@@ -245,13 +245,80 @@
     }catch(err){
       if(ticket!==serial||err?.name==="AbortError")return;
       window.NodivraModules.complete("graph_failed");
-      lastError="Could not verify transfers for this wallet: "+(err?.message||"provider unavailable")+
-        ". The displayed map contains only evidence loaded earlier; no new links were inferred.";
+      lastError="Could not verify additional transfers for this wallet: "+(err?.message||"provider unavailable")+
+        ". Existing lines, if any, come from previous source-linked transaction samples; no new links were inferred.";
       state(lastError,true);
     }finally{
       if(ticket===serial){setLoading(false);paint();}
     }
   }
+
+  // A direct wallet lookup can still provide legitimate indexed events if the richer trace endpoint fails.
+  // Never infer an edge from balances, tags, ENS names, or a "connections" count.
+  function ingestWalletSample(address,data){
+    if(!VALID.test(address)||!root||address.toLowerCase()!==root.toLowerCase()||network!=="ethereum")return 0;
+    let count=0;
+    const source="https://eth.blockscout.com";
+    const add=(row)=>{
+      if(!VALID.test(row.from)||!VALID.test(row.to)||!/^0x[a-fA-F0-9]{64}$/.test(row.tx_hash))return;
+      if(row.from.toLowerCase()===row.to.toLowerCase())return;
+      const key=edgeKey(row);
+      if(graph.edges.has(key))return;
+      graph.edges.set(key,row);count++;
+      for(const party of [row.from,row.to])
+        if(!graph.nodes.has(party.toLowerCase()))graph.nodes.set(party.toLowerCase(),{address:party,labels:[]});
+    };
+    function amount(raw,decimals){
+      if(!/^\d+$/.test(String(raw??"")))return null;
+      const num=BigInt(String(raw)),d=Number(decimals);
+      if(num<=0n||!Number.isInteger(d)||d<0||d>36)return null;
+      const base=10n**BigInt(d);
+      const fraction=(num%base).toString().padStart(d,"0").slice(0,8).replace(/0+$/,"");
+      return (num/base).toString()+(fraction?"."+fraction:"");
+    }
+    for(const tx of (Array.isArray(data?.transactions)?data.transactions:[]).slice(0,35)){
+      if(tx.status==="error"||tx.status==="failed")continue;
+      const value=amount(tx.value,18);
+      if(value===null)continue;
+      add({from:tx.from?.hash,to:tx.to?.hash,tx_hash:tx.hash,kind:"native",
+        asset:"ETH",asset_contract:null,event_index:null,amount:value,
+        timestamp:tx.timestamp||null,block:tx.block??null,
+        source_url:source+"/tx/"+tx.hash});
+    }
+    for(const tx of (Array.isArray(data?.token_transfers)?data.token_transfers:[]).slice(0,35)){
+      if(tx.token_type!=="ERC-20"&&tx.token?.type!=="ERC-20")continue;
+      const value=amount(tx.total?.value??tx.value,tx.token?.decimals);
+      const contract=tx.token?.address_hash||tx.token?.address;
+      if(value===null||!VALID.test(contract||""))continue;
+      add({from:tx.from?.hash,to:tx.to?.hash,tx_hash:tx.transaction_hash,kind:"token",
+        asset:String(tx.token?.symbol||"ERC-20").slice(0,24),asset_contract:contract,
+        event_index:tx.log_index??tx.index??null,amount:value,
+        timestamp:tx.timestamp||null,block:tx.block_number??null,
+        source_url:source+"/tx/"+tx.transaction_hash});
+    }
+    if(count){
+      if(!busy)state("Map supplemented with "+count+" source-linked event(s) from a recent Ethereum wallet lookup. Data may be partial.");
+      paint();
+    }
+    return count;
+  }
+  function exportMap(){
+    if(!root)return;
+    const data={title:"NODIVRA · observed transaction map",generated_at:new Date().toISOString(),
+      network,starting_wallet:root,selected_wallet:focus,
+      observed_nodes:[...graph.nodes.values()],observed_edges:[...graph.edges.values()],
+      limitations:["Only fetched indexed public transaction samples are included.",
+        "Transfers do not prove common ownership or continuity of the same stolen funds.",
+        "A data-provider error or missing event is not evidence of inactivity.",
+        "This export is not a forensic chain-of-custody certificate."]};
+    const contents=JSON.stringify(data,null,2);
+    const blob=new Blob([contents],{type:"application/json"});
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download="nodivra-wallet-map-"+root.slice(0,12)+".json";
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
   function select(address,{breadcrumb=false}={}){
     if(!VALID.test(address)||busy)return;
     if(address.toLowerCase()===focus.toLowerCase()){incidentDetails(address);return;}
@@ -302,8 +369,9 @@
   $("map-zoom-in").addEventListener("click",()=>{zoom=Math.min(2,Math.round((zoom+.25)*100)/100);paint();});
   $("map-zoom-out").addEventListener("click",()=>{zoom=Math.max(.75,Math.round((zoom-.25)*100)/100);paint();});
   $("map-fit").addEventListener("click",()=>{zoom=1;paint();});
+  $("map-export").addEventListener("click",exportMap);
   window.NodivraMap=Object.freeze({
-    start,reset:clear,select,back:focusBack,expand:()=>{if(focus&&!busy){depth=2;return fetchTrace(focus);}},
+    start,reset:clear,select,ingestWalletSample,exportMap,back:focusBack,expand:()=>{if(focus&&!busy){depth=2;return fetchTrace(focus);}},
     onReport(fn){if(typeof fn==="function")onReport=fn;},
     onClear(fn){if(typeof fn==="function")onClear=fn;},
     snapshot:()=>({root,focus,network,depth,history:[...history],nodes:graph.nodes.size,edges:graph.edges.size,busy})
