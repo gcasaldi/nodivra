@@ -22,3 +22,7 @@ The output is intentionally short: **what can be established, what the first ver
 Real provider tests and at least five independently documented incidents with original transaction hashes, evidence links and known expected outcomes. Compare findings against manual explorer work and competing public tooling. Document false positives before calling this suitable for operational investigations.
 
 Source API: https://github.com/blockscout/blockscout-api-v2-swagger/blob/main/swagger.yaml
+
+### Public example (not an incident)
+
+The **Try a public transaction** button uses an example successful Ethereum Uniswap liquidity-removal transaction documented in the Blockscout-compatible Routescan API: `0xe4bee4633e263bed39ad812b2c8078fb7328c052c64f62903993074d20702fb2`. This is a neutral test case, **not** a report of theft or wrongdoing. The live preview may be rate-limited by public indexers.

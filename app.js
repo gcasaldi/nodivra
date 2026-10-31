@@ -977,7 +977,7 @@
     }finally{originBtn.disabled=false;originBtn.textContent="Trace earliest funding →";}
   }
   form.addEventListener("submit",e=>{e.preventDefault();lookup(input.value);});
-  $("example").addEventListener("click",()=>lookup("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+  $("example").addEventListener("click",()=>lookup("0xe4bee4633e263bed39ad812b2c8078fb7328c052c64f62903993074d20702fb2"));
   originBtn.addEventListener("click",traceOrigin);
   $("trace-button").addEventListener("click",runInvestigation);
   $("case-report").addEventListener("click",exportCaseDossier);

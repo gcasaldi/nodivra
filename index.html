@@ -9,8 +9,8 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261031-incident-v1">
-  <script src="app.js?v=20261031-incident-v1" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261031-incident-v2">
+  <script src="app.js?v=20261031-incident-v2" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -38,7 +38,7 @@
             <input id="wallet" name="wallet" type="text" spellcheck="false" autocomplete="off" inputmode="text" placeholder="Transaction hash, wallet or ENS name" aria-describedby="wallet-help" maxlength="260" required>
             <button id="lookup-button" class="button primary" type="submit">Search <span aria-hidden="true">→</span></button>
           </div>
-          <div class="form-foot"><span id="wallet-help">Public ENS name search · EVM · Bitcoin · Solana</span><button class="text-button" type="button" id="example">Try example ↗</button></div>
+          <div class="form-foot"><span id="wallet-help">Public ENS name search · EVM · Bitcoin · Solana</span><button class="text-button" type="button" id="example">Try a public transaction ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Paste a wallet address, ENS name, or EVM transaction hash.</p>
         <div id="name-results" class="name-results" hidden></div>
