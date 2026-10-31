@@ -154,6 +154,7 @@ test('dashboard shows only evidence-backed graph counts, source condition and ch
  assert.equal(nodes['ops-wallets'].textContent,'2');
  assert.equal(nodes['ops-coverage'].textContent,'Indexed');
  assert.equal(nodes['ops-network'].textContent,'ETHEREUM');
+ assert.equal(nodes['ops-status-label'].textContent,'READY');
  assert.equal(nodes['ops-feed'].children.length>=1,true);
  map.reset();
  assert.equal(nodes['ops-coverage'].textContent,'Not checked');
@@ -167,6 +168,7 @@ test('degraded HTTP 200 from all indexers is not represented as successful zero-
  map.start(A);await tick();
  assert.equal(map.snapshot().edges,0);
  assert.equal(nodes['ops-coverage'].textContent,'Limited');
+ assert.equal(nodes['ops-status-label'].textContent,'SOURCE ISSUE');
  assert.match(nodes['map-status'].textContent,/temporarily unavailable/);
  assert.ok(states.includes('graph_failed'));
 });
