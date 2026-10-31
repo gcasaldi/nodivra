@@ -7,7 +7,7 @@
   const COLORS={subject:"#63a9ff",tagged:"#f7bb73",normal:"#af9cf9"};
   const graph={nodes:new Map(),edges:new Map()};
   let root="",focus="",network="ethereum",depth=1,history=[],controller=null,serial=0;
-  let busy=false,zoom=1,onReport=()=>{},onClear=()=>{},lastError="";
+  let busy=false,zoom=1,onReport=()=>{},onClear=()=>{},lastError="",lastStatusError=false;
   const short=s=>!s?"Unknown":s.slice(0,7)+"…"+s.slice(-5);
   const safeUrl=u=>typeof u==="string"&&/^https:\/\//.test(u)?u:null;
   const el=(name,className,text)=>{
@@ -33,6 +33,7 @@
     const coverage=$("ops-coverage");if(coverage)coverage.textContent=status||"Not checked";
   }
   function state(text,isError=false){
+    lastStatusError=isError;
     const e=$("map-status");if(e){e.textContent=text;e.classList.toggle("error",isError);}
     const indicator=$("ops-activity-status");
     if(indicator){
@@ -257,6 +258,7 @@
     $("map-network").disabled=v;
     $("map-expand").disabled=v;
     $("map-back").disabled=v||!history.length;
+    if(!v)state($("map-status")?.textContent||"",lastStatusError);
   }
   async function fetchTrace(address){
     if(!VALID.test(address))return;
