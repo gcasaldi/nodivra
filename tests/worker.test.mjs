@@ -294,3 +294,38 @@ test('Routescan error response is not mistaken for a valid empty wallet',async()
  assert.equal(r.json.coverage.data_status,'unavailable');
  assert.match(r.json.conclusions[0],/unavailable/i);
 });
+
+test('Ethplorer development fallback preserves verified ETH transaction after both other indexers fail',async()=>{
+ const h=hash('9');
+ fakeFetch(url=>{
+   const u=String(url);
+   if(u.includes('eth.blockscout.com'))return {status:429,data:{}};
+   if(u.includes('api.routescan.io'))return {status:429,data:{}};
+   if(u.includes('api.ethplorer.io/getAddressTransactions/'))return {data:[{
+     from:root,to:parent,hash:h,rawValue:'2000000000000000000',
+     success:true,timestamp:1793460000
+   }]};
+   throw Error('Unexpected '+u);
+ });
+ const r=await request('/investigate?address='+root+'&network=ethereum&depth=1&direction=out');
+ assert.equal(r.status,200);
+ assert.match(r.json.coverage.primary_source,/Ethplorer/);
+ assert.equal(r.json.graph.edges.length,1);
+ assert.equal(r.json.graph.edges[0].tx_hash,h);
+ assert.ok(r.json.osint.sources.some(s=>s.name.includes('Ethplorer')));
+});
+test('Ethplorer fallback does not promote failed or unverified events into observed transfers',async()=>{
+ fakeFetch(url=>{
+   const u=String(url);
+   if(u.includes('blockscout.com')||u.includes('api.routescan.io'))return {status:429,data:{}};
+   if(u.includes('api.ethplorer.io'))return {data:[
+     {from:root,to:parent,hash:hash('8'),rawValue:'100',success:false,timestamp:1793460000},
+     {from:root,to:parent,hash:hash('7'),value:'2.3',success:true,timestamp:1793460000}
+   ]};
+   throw Error('Unexpected '+u);
+ });
+ const r=await request('/investigate?address='+root+'&network=ethereum&depth=1');
+ assert.equal(r.status,200);
+ assert.equal(r.json.graph.edges.length,0);
+ assert.equal(r.json.coverage.primary_providers.native,'ethplorer');
+});

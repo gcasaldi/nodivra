@@ -796,9 +796,12 @@ async function investigateFlows(address,options) {
  if(root.source==="Blockscout API v2")await Promise.allSettled(primary.slice(0,2).map(id=>traceEnrich(nodes.get(id),chain)));
  const finalNodes=[...nodes.values()];
  const investigator_leads=buildActionableLeads(address,finalNodes,edges,chain);
- const sources=[{name:"Blockscout public indexed transfers",url:chain.explorer+"/address/"+address,
-   kind:"primary on-chain observation",method:"API v2 address transactions and token transfers"},
-  {name:"Public intelligence tags",url:chain.explorer+"/address/"+address,kind:"explorer and opt-in names"}];
+ const primarySourceUrl=root.source?.startsWith("Ethplorer")?"https://ethplorer.io/address/"+address:
+   root.source?.startsWith("Routescan")?"https://routescan.io/address/"+address+"?chainid="+chain.chain_id:
+   chain.explorer+"/address/"+address;
+ const sources=[{name:root.source||"Public index",url:primarySourceUrl,
+    kind:"queried source",method:"bounded recent transactions / token transfers"},
+   {name:"Independent explorer verification",url:chain.explorer+"/address/"+address,kind:"manual primary-record cross-check"}];
  if(chain.id==="ethereum") sources.push({name:"Etherscan cross-check",url:"https://etherscan.io/address/"+address,kind:"independent explorer"});
  const attributed=finalNodes.filter(n=>n.labels?.length);
  const flags=finalNodes.filter(n=>n.labels?.some(l=>l.category?.startsWith("Risk")));
