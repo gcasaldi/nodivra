@@ -8,7 +8,7 @@ The question I want it to answer is simple: **what can I actually find out about
 
 - [x] Search public activity on Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana.
 - [x] Add on-demand historical FuseChain research lookup for Ethereum addresses with explicit label and source limitations.
-- [x] Document Elliptic Bitcoin as an offline graph-ML benchmark; it is not an address-to-identity database.
+- [x] Add an offline graph-edge analyzer for the Elliptic Bitcoin research benchmark; it is not an address-to-identity database.
 - [x] Add a selective CSV preparation script for the large Ethereum research dataset (no automatic 92 GB download).
 - [x] Start from an EVM transaction hash on a selected network and follow its sender or recipient.
 - [x] Search public ENS names using a possible name or surname, with clear evidence and uncertainty labels.

@@ -30,6 +30,7 @@ I only want datasets here when they help answer a real investigative question, a
 - 203,769 transaction nodes and their edge list, with illicit / licit / unknown research classes.
 - IDs in the graph are **research transaction identifiers**, not known Bitcoin wallet owners.
 - Appropriate for testing graph algorithms and measuring false positives, **not** for looking up an arbitrary BTC wallet or individual.
+- `scripts/inspect_elliptic.py` accepts the original class and edge CSVs, streaming edge statistics into a transparent JSON summary. No live wallet lookup or person attribution is implemented.
 
 ## Release rules
 
