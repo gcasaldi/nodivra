@@ -93,6 +93,8 @@
       state.connect="Building map";setEmpty("connect",false);
     }else if(type==="graph_failed"){
       state.connect="Source unavailable";setEmpty("connect",false);
+    }else if(type==="graph_fallback"){
+      state.connect="Indexed sample";setEmpty("connect",false);
     }else if(type==="incident"){
       scenario="incident";
       state.investigate="Verified source";
@@ -106,7 +108,8 @@
       scenario="wallet";
       state.investigate="Wallet result";
       state.correlate=Array.isArray(data?.transactions)?"Indexed evidence":"Partial sources";
-      state.connect=Array.isArray(data?.transactions)?"Trace available":"Index may be limited";
+      if(!["Building map","Source unavailable","Indexed sample","Observed graph","No sampled transfers"].includes(state.connect))
+        state.connect=Array.isArray(data?.transactions)?"Trace available":"Index may be limited";
       if(state.report!=="Export ready"){
         state.recommend="Run a trace";
         state.report="Run a trace";

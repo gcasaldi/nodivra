@@ -261,6 +261,7 @@
     const source="https://eth.blockscout.com";
     const add=(row)=>{
       if(!VALID.test(row.from)||!VALID.test(row.to)||!/^0x[a-fA-F0-9]{64}$/.test(row.tx_hash))return;
+      if(row.from.toLowerCase()!==address.toLowerCase()&&row.to.toLowerCase()!==address.toLowerCase())return;
       if(row.from.toLowerCase()===row.to.toLowerCase())return;
       const key=edgeKey(row);
       if(graph.edges.has(key))return;
@@ -277,7 +278,7 @@
       return (num/base).toString()+(fraction?"."+fraction:"");
     }
     for(const tx of (Array.isArray(data?.transactions)?data.transactions:[]).slice(0,35)){
-      if(tx.status==="error"||tx.status==="failed")continue;
+      if(tx.status!=="ok"&&tx.status!=="success")continue;
       const value=amount(tx.value,18);
       if(value===null)continue;
       add({from:tx.from?.hash,to:tx.to?.hash,tx_hash:tx.hash,kind:"native",
@@ -297,6 +298,7 @@
         source_url:source+"/tx/"+tx.transaction_hash});
     }
     if(count){
+      window.NodivraModules.complete("graph_fallback");
       if(!busy)state("Map supplemented with "+count+" source-linked event(s) from a recent Ethereum wallet lookup. Data may be partial.");
       paint();
     }
