@@ -1,6 +1,7 @@
 "use strict";
 (() => {
   const API = "https://nodivra-api.gcasaldi.workers.dev";
+  const Modules = window.NodivraModules;
   const DIRECT = "https://eth.blockscout.com/api/v2";
   const ETHERSCAN = "https://etherscan.io/address/";
   const BLOCKSCOUT = "https://eth.blockscout.com/address/";
@@ -475,6 +476,7 @@
       const report=await fetchJson(API+"/investigate?"+query.toString(),null,40000);
       if(address!==activeAddress||sequence!==investigationSequence){return;}
       flowEvidence=report;renderInvestigationLeads(report);renderFlowGraph(report);
+      Modules.complete("trace",report);
       $("trace-details").hidden=false;
       $("case-workspace").hidden=false;
       $("trace-details").open=false;
@@ -606,6 +608,7 @@
       const data=await fetchJson(API+"/multichain?address="+encodeURIComponent(address),controller.signal,30000);
       if(activeRequest!==controller)return;
       chainResult(data);
+      Modules.complete("scan",data);
       if(data.format==="bitcoin"||data.format==="solana"){
         results.hidden=true;
         setStatus(data.format==="bitcoin"?"Bitcoin address investigation: "+(data.networks?.[0]?.transaction_count??"unavailable")+" confirmed transactions in the indexed address history.":"Solana address investigation: current balances and indexed recent signatures. Use the linked explorer for full details.");
@@ -646,6 +649,35 @@
     a.href=url;a.download="nodivra-incident-"+full.incident.tx_hash.slice(0,12)+"."+(textMode?"txt":"json");
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
   }
+
+  function renderIncidentRelationMap(report){
+    const shell=element("div","incident-relationship");
+    shell.appendChild(element("div","tiny-label","OBSERVED ON-CHAIN RELATIONSHIPS · NOT A FUND-CONTINUITY CLAIM"));
+    const events=[...(report.initial_events||[]).map(e=>({...e,group:"Original transaction"})),
+      ...(report.later_observed_events||[]).map(e=>({...e,group:"Later sampled event"}))].slice(0,16);
+    if(!events.length){
+      shell.appendChild(element("p","minor","No confirmed transfer relationships were returned by this public index."));
+      return shell;
+    }
+    const timeline=element("ol","incident-path");
+    for(const [index,e] of events.entries()){
+      const row=element("li","incident-path-item");
+      const marker=element("span","incident-path-marker",String(index+1).padStart(2,"0"));
+      const content=element("div","incident-path-detail");
+      content.appendChild(element("strong","",e.group+" · "+e.amount+" "+e.asset));
+      const line=element("div","incident-path-addresses");
+      line.appendChild(element("span","",trimHash(e.from)));
+      line.appendChild(element("span","incident-path-arrow","→"));
+      line.appendChild(element("span","",trimHash(e.to)));
+      content.appendChild(line);
+      if(e.source_url?.startsWith("https://"))content.appendChild(link(e.source_url,"View source transaction ↗"));
+      row.appendChild(marker);row.appendChild(content);timeline.appendChild(row);
+    }
+    shell.appendChild(timeline);
+    shell.appendChild(element("p","minor","These are indexed transfers, grouped by observation. An arrow shows an on-chain event, not shared control or proof that the same funds continued."));
+    return shell;
+  }
+
   function renderInitialIncident(report,parent){
     triageReport=report;
     const summary=element("section","incident-verdict");
@@ -665,7 +697,7 @@
     action.appendChild(element("div","tiny-label","FIRST INVESTIGATIVE NEXT STEP"));
     action.appendChild(element("h3","",report.first_next_action.title));
     action.appendChild(element("p","",report.first_next_action.reason));
-    parent.appendChild(action);
+    Modules.incidentSlot("recommend").appendChild(action);
     const evidence=element("details","case-details");
     evidence.appendChild(element("summary","","View original evidence & possible leads ↗"));
     const body=element("div","incident-evidence");
@@ -688,12 +720,28 @@
       if(label.source?.startsWith("https://"))row.appendChild(link(label.source,"Label source ↗"));
       body.appendChild(row);
     }
-    evidence.appendChild(body);parent.appendChild(evidence);
+    const connect=Modules.incidentSlot("connect");
+    connect.appendChild(renderIncidentRelationMap(report));
+    evidence.open=true;
+    evidence.appendChild(body);connect.appendChild(evidence);
     const uncertainties=element("details","case-details");
     uncertainties.appendChild(element("summary","","What the evidence does NOT establish ↗"));
     const gap=element("div","incident-evidence");
     for(const value of [...report.coverage.issues,...report.limitations])gap.appendChild(element("p","minor","• "+value));
-    uncertainties.appendChild(gap);parent.appendChild(uncertainties);
+    const correlate=Modules.incidentSlot("correlate");
+    correlate.appendChild(element("h4","module-mini-heading","PUBLIC SOURCE CROSS-CHECK"));
+    if(report.public_label_leads?.length){
+      for(const label of report.public_label_leads){
+        const row=element("div","incident-evidence-row");
+        row.appendChild(element("strong","","Indexer tag: "+label.label+" · unverified"));
+        if(label.source?.startsWith("https://"))row.appendChild(link(label.source,"Original source ↗"));
+        correlate.appendChild(row);
+      }
+    }else{
+      correlate.appendChild(element("p","minor","No indexed public labels among observed onward recipients. This does not establish anonymity or safety."));
+    }
+    uncertainties.open=true;
+    uncertainties.appendChild(gap);correlate.appendChild(uncertainties);
     const exportBox=element("details","case-details");
     exportBox.appendChild(element("summary","","Export a short incident dossier ↗"));
     const frm=element("div","case-fields");
@@ -711,12 +759,15 @@
       const btn=element("button","button secondary",caption);btn.type="button";
       btn.addEventListener("click",()=>downloadTriage(type));buttons.appendChild(btn);
     }
-    frm.appendChild(buttons);exportBox.appendChild(frm);parent.appendChild(exportBox);
+    frm.appendChild(buttons);exportBox.appendChild(frm);exportBox.open=true;
+    Modules.incidentSlot("report").appendChild(exportBox);
+    Modules.complete("incident",report);
     parent.appendChild(element("p","lead-disclaimer","A later transaction is a lead, not proof that the same stolen assets moved. This is not a certified forensic report."));
   }
   async function investigateTransaction(raw,network="ethereum"){
     const hash=String(raw||"").trim();
     if(!/^0x[a-fA-F0-9]{64}$/.test(hash))return false;
+    Modules.reset("incident");
     if(activeRequest)activeRequest.abort();
     const controller=new AbortController();activeRequest=controller;
     activeAddress="";evidenceSnapshot=null;flowEvidence=null;triageReport=null;
@@ -795,6 +846,7 @@
       box.appendChild(research);
       box.appendChild(element("p","lead-disclaimer","ENS registration is not proof of a real person's identity. Check authenticated public claims and current wallet resolution before attributing ownership."));
       if(response.warnings?.length)box.appendChild(element("p","minor","Some provider lookups failed: "+response.warnings.join("; ")));
+      Modules.complete("name",response);
       setStatus(items.length?items.length+" public ENS candidates found. None is automatically attributed to the name.":"No matching ENS names found in this limited public index. Explore other public claims or search by wallet.");
     }catch(err){
       if(activeRequest!==controller)return;
@@ -817,6 +869,7 @@
       const found=await fetchJson(API+"/research-labels?address="+encodeURIComponent(address),controller.signal,16000);
       if(activeRequest!==controller||activeAddress.toLowerCase()!==address.toLowerCase())return;
       lastResearch=found;
+      Modules.complete("research",found);
       container.replaceChildren();
       const heading=element("div","research-heading");
       heading.appendChild(element("strong","","Research cross-check"));
@@ -842,6 +895,7 @@
   }
 
   async function lookup(address) {
+    Modules.reset(isPublicNameQuery(address)?"name":"wallet");
     if(isPublicNameQuery(address)){await searchPublicNames(address);return;}
     $("name-results").hidden=true;
     if(/^0x[a-fA-F0-9]{64}$/.test(String(address||"").trim())){await investigateTransaction(address);return;}
@@ -922,6 +976,7 @@
       renderTokens(data);
       renderTransactions(data,normalized);
       results.hidden=false;
+      Modules.complete("wallet",data);
       setUrl(normalized);
       const internalCount=data.internal_transactions?.length||0, tokenCount=data.token_transfers?.length||0;
       const hasIndexedTx=Array.isArray(data.transactions);
