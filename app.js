@@ -895,9 +895,12 @@
     }
   }
 
-  async function lookup(address) {
-    WalletMap.reset();
-    Modules.reset(isPublicNameQuery(address)?"name":"wallet");
+  async function lookup(address,options={}) {
+    const details=options.details===true;
+    if(!details){
+      WalletMap.reset();
+      Modules.reset(isPublicNameQuery(address)?"name":"wallet");
+    }
     if(isPublicNameQuery(address)){await searchPublicNames(address);return;}
     $("name-results").hidden=true;
     if(/^0x[a-fA-F0-9]{64}$/.test(String(address||"").trim())){await investigateTransaction(address);return;}
@@ -947,12 +950,14 @@
       if(activeRequest!==controller)return;
       activeAddress=normalized;
       input.value=normalized;
-      // Open the map immediately: the graph works independently from the wallet balance/index lookup.
-      WalletMap.start(normalized);
-      Modules.complete("graph_loading",null);
-      // The HF research query is independent of Blockscout and may work even if the explorer is limited.
-      scanResearchHistory(normalized,controller);
-      // Cross-chain scan runs after the primary lookup to reduce API rate-limit spikes.
+      if(!details){
+        // Only ONE investigative graph request at first. Metadata and cross-chain calls
+        // must be user initiated, otherwise public indexers immediately rate-limit.
+        WalletMap.start(normalized);
+        setStatus("Opening the evidence map. Tap a wallet to explore; additional source checks are optional.");
+        return;
+      }
+      // The separate context functions are intentionally deferred until requested.
       $("explorer-link").href=BLOCKSCOUT+normalized;
       $("result-address").textContent=normalized;
       $("balance").textContent="—";$("shown").textContent="—";$("account-type").textContent="—";
@@ -1008,7 +1013,7 @@
         status.appendChild(link(ETHERSCAN+normalized,"Open Etherscan ↗"));
       }
     }finally {
-      if(activeRequest===controller){if(ADDRESS_RE.test(normalized||""))scanAllNetworks(normalized,controller);button.disabled=false;button.textContent="Search →";}
+      if(activeRequest===controller){button.disabled=false;button.textContent="Search →";}
     }
   }
   async function traceOrigin() {
@@ -1060,6 +1065,30 @@
   });
   form.addEventListener("submit",e=>{e.preventDefault();lookup(input.value);});
   $("example").addEventListener("click",()=>lookup("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"));
+  function requireSelectedWallet(){
+    if(!ADDRESS_RE.test(activeAddress||"")){
+      setStatus("First search for an EVM wallet. Then return to CORRELATE for optional cross-checks.",true);
+      return false;
+    }
+    return true;
+  }
+  $("metadata-button").addEventListener("click",()=>{
+    if(!requireSelectedWallet())return;
+    lookup(activeAddress,{details:true});
+  });
+  $("network-scan-button").addEventListener("click",()=>{
+    if(!requireSelectedWallet())return;
+    if(activeRequest)activeRequest.abort();
+    const ctrl=new AbortController();
+    activeRequest=ctrl;
+    scanAllNetworks(activeAddress,ctrl);
+  });
+  $("research-scan-button").addEventListener("click",()=>{
+    if(!requireSelectedWallet())return;
+    const ctrl=new AbortController();
+    scanResearchHistory(activeAddress,ctrl);
+  });
+
   originBtn.addEventListener("click",traceOrigin);
   $("trace-button").addEventListener("click",runInvestigation);
   $("case-report").addEventListener("click",exportCaseDossier);

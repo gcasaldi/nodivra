@@ -9,10 +9,10 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261031-provider-v2">
-  <script src="modules.js?v=20261031-provider-v2" defer></script>
-  <script src="map.js?v=20261031-provider-v2" defer></script>
-  <script src="app.js?v=20261031-provider-v2" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261031-provider-v3">
+  <script src="modules.js?v=20261031-provider-v3" defer></script>
+  <script src="map.js?v=20261031-provider-v3" defer></script>
+  <script src="app.js?v=20261031-provider-v3" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -127,6 +127,12 @@
               <p>Compare explorer evidence, indexed chains, public ENS names and historical research labels. Every tag is a lead, not proof of identity.</p>
               <span class="module-scope">Public labels and source limitations · Cross-chain snapshots are NOT proven fund transfers</span></div>
             <p id="module-empty-correlate" class="module-empty">Run an investigation first. Source-backed metadata, coverage and possible public labels will appear here.</p>
+            <div class="context-actions" aria-label="Optional network and metadata lookups">
+              <button id="metadata-button" type="button">Load Ethereum wallet details</button>
+              <button id="network-scan-button" type="button">Scan EVM networks</button>
+              <button id="research-scan-button" type="button">Historical research labels</button>
+            </div>
+            <p class="minor context-warning">These checks are optional and can be slow or temporarily limited by public data providers. The CONNECT map does not wait for them.</p>
             <div id="incident-correlate-content" hidden></div>
             <div id="module-correlate-body"></div>
             <div class="module-next"><span>Next: inspect observed counterparties and traceable links.</span><button type="button" class="module-next-btn" data-next-module="connect">Go to CONNECT →</button></div>
