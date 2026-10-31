@@ -715,8 +715,26 @@ async function investigateFlows(address,options) {
   edges.push({...item,hop,observed_via:discoveredFrom,evidence_type:"on_chain_indexed_transfer"});
  }
  const root=await tracePage(address,chain,direction);
- if(root.status.native!=="ok" && root.status.token!=="ok")
-  failure("The public transaction and token index are both unavailable. No trace can be verified.",503);
+ if(root.status.native!=="ok" && root.status.token!=="ok") {
+  // A source outage is not an empty wallet. Return an explicit, machine-readable
+  // unavailable state so the app can offer retry and independent source links.
+  const empty=traceNode(address,0,null);
+  return {version:"0.6.0-beta",address,network:chain.name,network_id:chain.id,
+    chain_id:chain.chain_id,asset:chain.symbol,queried_at:new Date().toISOString(),
+    mode:{direction,depth_requested:depth,depth_achieved:0},
+    graph:{nodes:[empty],edges:[]},
+    investigator_leads:{first_action:"Public transaction index unavailable — retry later or check the independent explorer.",top_leads:[]},
+    stats:{nodes:1,transfers:0,entities_with_public_labels:0,expanded_peers:0,
+      observed_counterparties:0,source_warnings:2,publicly_tagged_entities:0},
+    coverage:{data_status:"unavailable",root:root.status,primary_source:"none",
+      primary_providers:root.providers,problems:root.warnings||[],
+      partial:true,sample:"No indexed transfer data was returned. No activity assessment is possible."},
+    osint:{public_labels:[],sources:[{name:"Independent explorer",
+      url:chain.explorer+"/address/"+address,kind:"manual verification"}]},
+    conclusions:["Sources unavailable — no determination about transactions or wallet activity was made."],
+    limitations:["No network or identity conclusion can be drawn from this outage."]};
+ }
+
  for(const e of root.edges.slice(0,24))pushEvidence(e,1,address);
  const rootPeers=edges.map(e=>e.from.toLowerCase()===address.toLowerCase()?e.to:e.from);
  const peerCount=new Map();
@@ -1018,8 +1036,8 @@ export default {
   }
   const send=(data,status=200)=>{
     const response=reply(request,data,status);
-    if(status===200&&cacheable.has(path)&&cache){
-      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:path==="/research-labels"?3600:path==="/investigate"?600:180));
+    if(status===200&&data?.coverage?.data_status!=="unavailable"&&cacheable.has(path)&&cache){
+      response.headers.set("Cache-Control","public, max-age="+(path==="/name-search"?900:path==="/research-labels"?3600:path==="/investigate"?240:180));
       try {
         const task=cache.put(request,response.clone());
         if(context?.waitUntil)context.waitUntil(task);else task.catch(()=>{});
@@ -1035,7 +1053,7 @@ export default {
    if(path==="/resolve")return send(await resolveEns(u.searchParams.get("name")));
    if(path==="/incident")return reply(request,await triageIncident(u.searchParams.get("hash")||"",u.searchParams.get("network")||"ethereum"));
    if(path==="/transaction"){const hash=u.searchParams.get("hash")||"";if(!/^0x[a-fA-F0-9]{64}$/.test(hash))failure("Valid 0x + 64-digit transaction hash required.",400);return reply(request,await inspectTransaction(hash,u.searchParams.get("network")||"ethereum"));}
-   if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return reply(request,await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}
+   if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return send(await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}
    if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return send(await scanEvm(address));if(BTC.test(address))return send(await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return send(await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
    const address=u.searchParams.get("address")||"";
    if(!ADDRESS.test(address))failure("Provide exactly 40 hexadecimal digits after 0x",400);
