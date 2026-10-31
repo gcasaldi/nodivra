@@ -161,7 +161,8 @@
       await navigator.clipboard.writeText(address);copy.textContent="Copied ✓";
     }catch(e){copy.textContent="Select the address above to copy";}});
     actions.appendChild(copy);
-    actions.appendChild(link("https://"+(network==="ethereum"?"eth":network)+".blockscout.com/address/"+encodeURIComponent(address),"Open explorer ↗"));
+    actions.appendChild(link("https://"+(network==="ethereum"?"eth":network)+".blockscout.com/address/"+encodeURIComponent(address),"Open Blockscout ↗"));
+    if(network==="ethereum")actions.appendChild(link("https://etherscan.io/address/"+encodeURIComponent(address),"Check Etherscan ↗"));
     pane.appendChild(actions);
     const connected=[...graph.edges.values()].filter(e=>e.from.toLowerCase()===address.toLowerCase()||e.to.toLowerCase()===address.toLowerCase());
     pane.appendChild(el("p","map-facts",connected.length+
@@ -239,8 +240,9 @@
       onReport(report);
       const observed=report.stats?.transfers??report.graph.edges.length;
       const partial=report.coverage?.partial;
-      state(observed+" indexed transfer event(s) · "+(partial?"some data sources incomplete":"sample loaded")+
-        " · tap a wallet to inspect its evidence.");
+      const provider=report.coverage?.primary_source||"public index";
+      state(observed+" observed transfer event(s) · "+(partial?"some sources incomplete":"public sample loaded")+
+        " · Source: "+provider+" · tap a wallet to examine evidence.");
       if(partial)lastError="Some sources were partial. Absence of activity in this sample proves nothing.";
     }catch(err){
       if(ticket!==serial||err?.name==="AbortError")return;

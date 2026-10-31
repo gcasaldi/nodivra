@@ -533,7 +533,8 @@ async function routescanRows(network,action,address){
 function parseRoutescanTx(row,network){
  const hash=row.hash,from=row.from,to=row.to;
  if(!/^0x[a-fA-F0-9]{64}$/.test(hash||"")||!ADDRESS.test(from||"")||!ADDRESS.test(to||""))return null;
- if(!/^\d+$/.test(String(row.value||""))||row.isError==="1"||row.txreceipt_status==="0")return null;
+ if(!/^\d+$/.test(String(row.value||""))||row.isError==="1"||row.txreceipt_status==="0"||
+    (row.isError!=="0"&&row.txreceipt_status!=="1"))return null;
  const when=Number(row.timeStamp),block=Number(row.blockNumber);
  if(!Number.isSafeInteger(when)||when<1||!Number.isSafeInteger(block)||block<1)return null;
  return {hash,from:{hash:from},to:{hash:to},status:"ok",value:row.value,

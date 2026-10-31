@@ -47,3 +47,24 @@ A good UX is not enough: the graph is only credible if each displayed edge is ba
 ## Known limits
 
 This is a read-only public beta. The graph only shows observed, sampled transaction links, not asset conservation, criminal involvement, confirmed wallet ownership, or a certified case chain of custody. Ethereum and other supported EVM chains can be selected, but Bitcoin, Solana, Tron and cross-chain path tracing still need separate implementations and real-world validation.
+
+## Screenshot incident — 2026-10-31
+
+The Android screenshot showed the EVM wallet map for `0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045` with zero fetched edges, **HTTP 429** on the public indexer and **HTTP 503** from the graph gateway. These are provider errors, not proof the wallet has zero transfers.
+
+### Mitigations applied
+
+- Graph-only initial lookup, with research labels, additional EVM network scans and Ethereum metadata moved to explicit actions in CORRELATE. This removes the simultaneous fanout of many indexer requests.
+- Routescan keyless Etherscan-compatible API as a read-only secondary transaction index when both Blockscout trace endpoints are unavailable. Strict address/hash/execution validation before creating edges.
+- One-first-page-per-address provider lookups and edge response caching for 10 minutes in the Worker edge cache, when the cache API is available.
+- Explicit source provenance in graph responses, HTTP 429/503 treated as unavailable, never a fabricated zero-activity finding.
+- Original transaction links, optional Etherscan manual cross-check and visible provider source in graph status.
+
+Routescan's free keyless tier has a strict per-second quota and may still be unavailable or rate-limited. Its stated terms request a **Powered by Routescan.io APIs** link, now included in the UI.
+
+### Acceptance status
+
+- GitHub Pages: current frontend deployed successfully according to GitHub Actions.
+- Cloudflare API Worker: new code upload accepted (HTTP 200).
+- Simulated mock: Blockscout 429 + Routescan valid transaction returns a source-linked edge; failed or invalid entries are excluded.
+- **Still not verified end-to-end against live provider data:** the connected runtime cannot access external API hosts for an independent test. The Android user must be able to obtain verifiable edges in the real browser before we can close the incident.
