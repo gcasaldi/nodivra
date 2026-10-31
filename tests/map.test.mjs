@@ -131,3 +131,13 @@ test('a wallet lookup for an unrelated case cannot contaminate the current map',
   assert.equal(injected,0);
   assert.equal(map.snapshot().edges,0);
 });
+
+test('backend outage shows a clear fallback panel instead of a one-node fake relationship graph',async()=>{
+  const {map,nodes}=setup(async()=>({status:503}));
+  map.start(A);await tick();
+  assert.equal(map.snapshot().edges,0);
+  const root=nodes['map-svg-host'].children[0];
+  assert.equal(root.tag,'div');
+  assert.match(root.className,/map-outage/);
+  assert.match(nodes['map-status'].textContent,/HTTP 503/);
+});
