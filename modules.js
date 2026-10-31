@@ -107,8 +107,10 @@
       state.investigate="Wallet result";
       state.correlate=Array.isArray(data?.transactions)?"Indexed evidence":"Partial sources";
       state.connect=Array.isArray(data?.transactions)?"Trace available":"Index may be limited";
-      state.recommend="Run a trace";
-      state.report="Run a trace";
+      if(state.report!=="Export ready"){
+        state.recommend="Run a trace";
+        state.report="Run a trace";
+      }
       $("advanced-evidence").hidden=false;
       for(const step of ["investigate","correlate","connect"])setEmpty(step,false);
     }else if(type==="name"){

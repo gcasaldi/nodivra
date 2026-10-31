@@ -7,7 +7,7 @@
   const COLORS={subject:"#83f7c7",tagged:"#d9b77d",normal:"#82b8d1"};
   const graph={nodes:new Map(),edges:new Map()};
   let root="",focus="",network="ethereum",depth=1,history=[],controller=null,serial=0;
-  let busy=false,zoom=1,onReport=()=>{},lastError="";
+  let busy=false,zoom=1,onReport=()=>{},onClear=()=>{},lastError="";
   const short=s=>!s?"Unknown":s.slice(0,7)+"…"+s.slice(-5);
   const safeUrl=u=>typeof u==="string"&&/^https:\/\//.test(u)?u:null;
   const el=(name,className,text)=>{
@@ -23,6 +23,7 @@
   }
   function clear(){
     if(controller)controller.abort();
+    onClear();
     controller=null;++serial;
     graph.nodes.clear();graph.edges.clear();
     root="";focus="";history=[];busy=false;zoom=1;lastError="";
@@ -243,6 +244,7 @@
       if(partial)lastError="Some sources were partial. Absence of activity in this sample proves nothing.";
     }catch(err){
       if(ticket!==serial||err?.name==="AbortError")return;
+      window.NodivraModules.complete("graph_failed");
       lastError="Could not verify transfers for this wallet: "+(err?.message||"provider unavailable")+
         ". The displayed map contains only evidence loaded earlier; no new links were inferred.";
       state(lastError,true);
@@ -253,7 +255,11 @@
   function select(address,{breadcrumb=false}={}){
     if(!VALID.test(address)||busy)return;
     if(address.toLowerCase()===focus.toLowerCase()){incidentDetails(address);return;}
-    if(!breadcrumb)history.push(focus);
+    if(breadcrumb){
+      const match=history.findIndex(v=>v.toLowerCase()===address.toLowerCase());
+      if(address.toLowerCase()===root.toLowerCase())history=[];
+      else if(match>=0)history=history.slice(0,match);
+    }else history.push(focus);
     focus=address;
     paint();
     fetchTrace(address);
@@ -271,6 +277,7 @@
     graph.nodes.set(address.toLowerCase(),{address,labels:[]});
     $("wallet-map").hidden=false;
     $("module-empty-connect").hidden=true;
+    window.NodivraModules.complete("graph_loading");
     window.NodivraModules.open("connect");
     state("Building your map from public transaction evidence…");
     paint();
@@ -298,6 +305,7 @@
   window.NodivraMap=Object.freeze({
     start,reset:clear,select,back:focusBack,expand:()=>{if(focus&&!busy){depth=2;return fetchTrace(focus);}},
     onReport(fn){if(typeof fn==="function")onReport=fn;},
+    onClear(fn){if(typeof fn==="function")onClear=fn;},
     snapshot:()=>({root,focus,network,depth,history:[...history],nodes:graph.nodes.size,edges:graph.edges.size,busy})
   });
 })();

@@ -1036,6 +1036,12 @@
       box.replaceChildren();box.appendChild(element("p","minor","Origin scan unavailable: "+e.message+". Recent evidence above remains accessible."));
     }finally{originBtn.disabled=false;originBtn.textContent="Trace earliest funding →";}
   }
+  WalletMap.onClear(()=>{
+    flowEvidence=null;
+    for(const id of ["trace-leads","trace-details","case-workspace"]){
+      const target=$(id);if(target)target.hidden=true;
+    }
+  });
   WalletMap.onReport(report=>{
     // Each map drill-down produces a trace report for the currently selected wallet.
     // This is NOT evidence that the same funds moved through every explored address.
