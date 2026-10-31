@@ -33,6 +33,8 @@ This is the **Evidence-to-Action / Claim Checker** idea. The first **Incident Tr
 
 ## What I've built
 
+- [x] Organize the web app into five accessible investigator modules, reusing the existing data, graph, decision and export features without inventing missing network coverage.
+
 - [x] Implement initial EVM incident triage from a transaction hash, with successful execution checks, ERC-20 and native event extraction, and bounded later same-asset observations.
 - [x] Surface the first practical verification step, evidence gaps and optional client-side case notes with text/JSON export.
 

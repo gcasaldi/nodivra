@@ -9,8 +9,9 @@
   <meta property="og:description" content="Follow public evidence. Understand wallet activity. Know where the trail ends.">
   <meta name="theme-color" content="#07131a">
   <title>NODIVRA — Blockchain Intelligence</title>
-  <link rel="stylesheet" href="styles.css?v=20261031-incident-v2">
-  <script src="app.js?v=20261031-incident-v2" defer></script>
+  <link rel="stylesheet" href="styles.css?v=20261031-modular-v1">
+  <script src="modules.js?v=20261031-modular-v1" defer></script>
+  <script src="app.js?v=20261031-modular-v1" defer></script>
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
@@ -26,8 +27,8 @@
   <main>
     <section class="hero wrap" id="mission">
       <div class="eyebrow"><span class="live-dot"></span> OPEN-SOURCE BLOCKCHAIN INTELLIGENCE <span class="version">/ BETA</span></div>
-      <h1>Find the trail<span class="accent">.</span></h1>
-      <p class="lead">Start from a crypto transaction. Get the first evidence-backed investigative step.</p>
+      <h1>From evidence to action<span class="accent">.</span></h1>
+      <p class="lead">Five modules. One investigation. Verify transactions, correlate public data, follow connections, prioritize checks and export evidence.</p>
     </section>
     <section class="workspace wrap" id="explore" aria-labelledby="explore-title">
       <div class="section-head"><div><h2 id="explore-title">Investigate an incident</h2></div><span class="badge">SEARCH · TRACE · VERIFY</span></div>
@@ -41,6 +42,14 @@
           <div class="form-foot"><span id="wallet-help">Public ENS name search · EVM · Bitcoin · Solana</span><button class="text-button" type="button" id="example">Try a public transaction ↗</button></div>
         </form>
         <p class="notice" role="status" id="status" aria-live="polite">Paste a wallet address, ENS name, or EVM transaction hash.</p>
+        <nav class="module-tabs" aria-label="Investigation workflow" role="tablist">
+          <button id="tab-investigate" type="button" role="tab" aria-controls="module-investigate" aria-selected="true" tabindex="0"><span class="module-index">01</span><strong>🔎 INVESTIGATE</strong><small id="module-badge-investigate">Ready</small></button>
+          <button id="tab-correlate" type="button" role="tab" aria-controls="module-correlate" aria-selected="false" tabindex="-1"><span class="module-index">02</span><strong>🧠 CORRELATE</strong><small id="module-badge-correlate">Not started</small></button>
+          <button id="tab-connect" type="button" role="tab" aria-controls="module-connect" aria-selected="false" tabindex="-1"><span class="module-index">03</span><strong>🕸 CONNECT</strong><small id="module-badge-connect">Not started</small></button>
+          <button id="tab-recommend" type="button" role="tab" aria-controls="module-recommend" aria-selected="false" tabindex="-1"><span class="module-index">04</span><strong>🎯 RECOMMEND</strong><small id="module-badge-recommend">Not started</small></button>
+          <button id="tab-report" type="button" role="tab" aria-controls="module-report" aria-selected="false" tabindex="-1"><span class="module-index">05</span><strong>📑 REPORT</strong><small id="module-badge-report">Not started</small></button>
+        </nav>
+
         <div id="name-results" class="name-results" hidden></div>
         <div id="transaction-result" class="transaction-result" hidden></div>
         <div id="research-results" class="research-results" hidden></div>
@@ -101,6 +110,52 @@
               <p class="disclaimer">Data is from independent public indexers. A transfer or label does not prove wallet ownership. Coverage may be incomplete.</p>
             </div>
           </details>
+        </div>
+
+        <div class="module-panes" aria-live="off">
+          <section id="module-investigate" class="module-pane" role="tabpanel" aria-labelledby="tab-investigate" tabindex="0">
+            <div class="module-intro"><span class="module-eyebrow">01 · VERIFY THE STARTING EVIDENCE</span><h3>Investigate</h3>
+              <p>Start with a transaction hash, wallet address, ENS or a possible public name. Verify what is actually observable before drawing a conclusion.</p>
+              <span class="module-scope">EVM incident triage · Bitcoin/Solana address snapshots only</span></div>
+            <p id="module-empty-investigate" class="module-empty">Start above with a public transaction or wallet to begin an investigation.</p>
+            <div id="module-investigate-body"></div>
+            <div class="module-next"><span>Next: cross-check data sources and labels.</span><button type="button" class="module-next-btn" data-next-module="correlate">Go to CORRELATE →</button></div>
+          </section>
+          <section id="module-correlate" class="module-pane" role="tabpanel" aria-labelledby="tab-correlate" tabindex="0" hidden>
+            <div class="module-intro"><span class="module-eyebrow">02 · CORRELATE PUBLIC DATA</span><h3>Correlate</h3>
+              <p>Compare explorer evidence, indexed chains, public ENS names and historical research labels. Every tag is a lead, not proof of identity.</p>
+              <span class="module-scope">Public labels and source limitations · Cross-chain snapshots are NOT proven fund transfers</span></div>
+            <p id="module-empty-correlate" class="module-empty">Run an investigation first. Source-backed metadata, coverage and possible public labels will appear here.</p>
+            <div id="incident-correlate-content" hidden></div>
+            <div id="module-correlate-body"></div>
+            <div class="module-next"><span>Next: inspect observed counterparties and traceable links.</span><button type="button" class="module-next-btn" data-next-module="connect">Go to CONNECT →</button></div>
+          </section>
+          <section id="module-connect" class="module-pane" role="tabpanel" aria-labelledby="tab-connect" tabindex="0" hidden>
+            <div class="module-intro"><span class="module-eyebrow">03 · MAP OBSERVED RELATIONSHIPS</span><h3>Connect</h3>
+              <p>Follow indexed transfers and inspect the original transaction evidence. A transaction link is not proof of common wallet ownership.</p>
+              <span class="module-scope">EVM wallet trace up to 2 hops · No verified BTC/Solana fund-flow tracing yet</span></div>
+            <p id="module-empty-connect" class="module-empty">For an EVM wallet, use Trace below. For an EVM transaction, this section will show observed transfer links. BTC/Solana graph tracing is not yet available.</p>
+            <div id="incident-connect-content" hidden></div>
+            <div id="module-connect-body"></div>
+            <div class="module-next"><span>Next: choose the first useful verification.</span><button type="button" class="module-next-btn" data-next-module="recommend">Go to RECOMMEND →</button></div>
+          </section>
+          <section id="module-recommend" class="module-pane" role="tabpanel" aria-labelledby="tab-recommend" tabindex="0" hidden>
+            <div class="module-intro"><span class="module-eyebrow">04 · TURN EVIDENCE INTO A NEXT STEP</span><h3>Recommend</h3>
+              <p>Prioritize the next defensible investigative check, with supporting transaction links and explicit uncertainty.</p>
+              <span class="module-scope">Deterministic suggestions · Not identity or criminality predictions</span></div>
+            <p id="module-empty-recommend" class="module-empty">No verified recommendation yet. Investigate a transaction or run an EVM wallet trace in CONNECT.</p>
+            <div id="incident-recommend-content" hidden></div>
+            <div id="module-recommend-body"></div>
+            <div class="module-next"><span>Next: preserve evidence and analyst notes.</span><button type="button" class="module-next-btn" data-next-module="report">Go to REPORT →</button></div>
+          </section>
+          <section id="module-report" class="module-pane" role="tabpanel" aria-labelledby="tab-report" tabindex="0" hidden>
+            <div class="module-intro"><span class="module-eyebrow">05 · DOCUMENT WHAT YOU CAN PROVE</span><h3>Report</h3>
+              <p>Export the observed facts, source links, uncertainties and your optional case notes. Your notes remain in this browser session.</p>
+              <span class="module-scope">Read-only exports · Not a certified forensic chain of custody</span></div>
+            <p id="module-empty-report" class="module-empty">Start an incident assessment or run an EVM trace to generate a source-backed report.</p>
+            <div id="incident-report-content" hidden></div>
+            <div id="module-report-body"></div>
+          </section>
         </div>
       </div>
     </section>

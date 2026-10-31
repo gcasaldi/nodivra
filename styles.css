@@ -284,3 +284,32 @@ body{background:#071219}
 .incident-evidence-row a{color:#87efcd}
 .incident-actions{display:flex;gap:9px;flex-wrap:wrap}
 @media(max-width:580px){.incident-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* NODIVRA's five-step investigator workflow */
+.module-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:22px 0 16px;padding:0}
+.module-tabs button{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;min-height:83px;padding:11px 10px;border-radius:9px;border:1px solid #35565b;background:#0a1b24;text-align:left;color:#9ebdbb;cursor:pointer}
+.module-tabs button strong{font-size:11px;letter-spacing:.025em;white-space:nowrap}
+.module-tabs button small{font-size:10px;color:#78979c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.module-tabs button[aria-selected="true"]{border-color:#72ddb5;background:#153c32;box-shadow:inset 0 0 0 1px #389476;color:#f0fffa}
+.module-tabs button[aria-selected="true"] small{color:#94f1d0}
+.module-tabs button:hover:not([aria-selected="true"]){border-color:#63a58f;color:#d8eae6}
+.module-tabs button:focus-visible,.module-next-btn:focus-visible{outline:2px solid #a9fbd8;outline-offset:3px}
+.module-index{font-size:9px;color:#83b8a9;font-weight:700;letter-spacing:.13em}
+.module-pane[hidden],.module-pane [hidden]{display:none!important}
+.module-pane{min-height:210px;padding:18px 19px;border-radius:13px;border:1px solid #2c5150;background:linear-gradient(155deg,#0b2327,#09181f)}
+.module-intro{margin-bottom:15px;border-bottom:1px solid #254c49;padding-bottom:14px}
+.module-eyebrow{color:#7ce6b8;font-size:10px;letter-spacing:.13em;font-weight:800}
+.module-intro h3{font-size:clamp(23px,3vw,31px);letter-spacing:-.045em;margin:5px 0 7px;color:#ebfff5}
+.module-intro p{font-size:12px;line-height:1.6;color:#afccc6;margin:0 0 10px;max-width:760px}
+.module-scope{display:inline-block;border:1px solid #426c64;color:#b9e1d5;border-radius:50px;padding:6px 10px;font-size:10px;line-height:1.35}
+.module-empty{padding:13px;border-radius:8px;background:#102832;color:#9ab7b5;font-size:12px;line-height:1.55}
+.module-next{margin-top:18px;padding-top:15px;border-top:1px solid #254c49;display:flex;align-items:center;justify-content:space-between;gap:12px;color:#8cacad;font-size:11px}
+.module-next-btn{border:1px solid #437c68;background:#10352c;color:#b9f8dc;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;flex-shrink:0}
+.module-next-btn:hover{background:#194d3e;color:#fff}
+.module-pane .investigation-panel{margin:0;padding:15px;border-color:#315e53}
+.module-pane #results .result-header{padding:5px 0 12px}
+.module-pane #module-correlate-body>:not([hidden]),.module-pane #module-connect-body>:not([hidden]),.module-pane #module-recommend-body>:not([hidden]),.module-pane #module-report-body>:not([hidden]){margin-top:8px}
+.module-pane #trace-leads{margin-top:0}
+.module-pane #case-workspace{margin-top:0}
+@media(max-width:900px){.module-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}.module-tabs button{min-height:75px}}
+@media(max-width:600px){.module-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}.module-tabs button strong{font-size:10px}.module-pane{padding:13px 11px}.module-next{flex-direction:column;align-items:flex-start}.module-next-btn{width:100%}.hero{padding:56px 0 38px}}
