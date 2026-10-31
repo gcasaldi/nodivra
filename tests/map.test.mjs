@@ -22,19 +22,24 @@ function setup(respond){
       this.value='ethereum';this.classList={add:s=>{this.className+=' '+s;},toggle:()=>{}};
     }
     appendChild(node){this.children.push(node);return node;}
+    prepend(node){this.children.unshift(node);return node;}
+    get lastElementChild(){return this.children[this.children.length-1]||null;}
+    remove(){}
     replaceChildren(...nodes){this.children=[...nodes];}
     setAttribute(key,val){this.attributes[key]=val;}
     addEventListener(type,fn){this.handlers[type]=fn;}
   }
   const ids=['wallet-map','map-svg-host','map-inspector','map-related','map-history','map-back',
     'map-expand','map-network','map-status','module-empty-connect','map-counter',
-    'map-home','map-zoom-in','map-zoom-out','map-fit','map-export'];
+    'map-home','map-zoom-in','map-zoom-out','map-fit','map-export',
+    'ops-feed','ops-transfers','ops-wallets','ops-coverage','ops-network','ops-activity-status','ops-status-label'];
   const nodes=Object.fromEntries(ids.map(id=>[id,new Node('div',id)]));
   const calls=[];
   const states=[];
   const context={
     document:{getElementById:id=>nodes[id]||null,
       createElement:tag=>new Node(tag),
+      createTextNode:value=>({textContent:String(value)}),
       createElementNS:(_,tag)=>new Node(tag)},
     window:{NodivraModules:{open:module=>states.push(module),complete:kind=>states.push(kind)}},
     navigator:{clipboard:{writeText:async()=>{}}},
@@ -61,7 +66,7 @@ test('wallet address opens directly in CONNECT and loads source-linked graph evi
   assert.equal(calls[0].searchParams.get('direction'),'both');
   assert.equal(calls[0].searchParams.get('depth'),'1');
   assert.ok(states.includes('connect'));
-  assert.match(nodes['map-status'].textContent,/1 indexed transfer event/);
+  assert.match(nodes['map-status'].textContent,/1 observed transfer event/);
   assert.match(nodes['map-counter'].textContent,/2 visible/);
 });
 test('drilldown grows evidence graph without inventing edges and back preserves the trail',async()=>{
@@ -140,4 +145,28 @@ test('backend outage shows a clear fallback panel instead of a one-node fake rel
   assert.equal(root.tag,'div');
   assert.match(root.className,/map-outage/);
   assert.match(nodes['map-status'].textContent,/HTTP 503/);
+});
+
+test('dashboard shows only evidence-backed graph counts, source condition and chain',async()=>{
+ const {map,nodes}=setup(u=>report(A,[edge(A,B,'c')]));
+ map.start(A);await tick();
+ assert.equal(nodes['ops-transfers'].textContent,'1');
+ assert.equal(nodes['ops-wallets'].textContent,'2');
+ assert.equal(nodes['ops-coverage'].textContent,'Indexed');
+ assert.equal(nodes['ops-network'].textContent,'ETHEREUM');
+ assert.equal(nodes['ops-feed'].children.length>=1,true);
+ map.reset();
+ assert.equal(nodes['ops-coverage'].textContent,'Not checked');
+});
+test('degraded HTTP 200 from all indexers is not represented as successful zero-activity result',async()=>{
+ const {map,nodes,states}=setup(async u=>({
+  address:A,graph:{nodes:[{address:A,labels:[]}],edges:[]},
+  coverage:{data_status:'unavailable',partial:true,problems:['rate limit']},
+  stats:{transfers:0},network_id:'ethereum'
+ }));
+ map.start(A);await tick();
+ assert.equal(map.snapshot().edges,0);
+ assert.equal(nodes['ops-coverage'].textContent,'Limited');
+ assert.match(nodes['map-status'].textContent,/temporarily unavailable/);
+ assert.ok(states.includes('graph_failed'));
 });
