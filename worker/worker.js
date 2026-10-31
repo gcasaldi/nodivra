@@ -576,6 +576,37 @@ async function routescanTracePage(address,network,direction){
    providers:{native:native===null?"unavailable":"routescan",token:tokens===null?"unavailable":"routescan"},
    warnings:failures,source:"Routescan Etherscan-compatible API"};
 }
+// Conservative, last-resort Ethereum-only historical lookup from Ethplorer.
+// The public "freekey" is for development, not a guaranteed production feed.
+// A valid response is a time-bounded sample, never a comprehensive on-chain history.
+async function ethplorerTracePage(address,network,direction) {
+ if(network.id!=="ethereum")return null;
+ const url="https://api.ethplorer.io/getAddressTransactions/"+encodeURIComponent(address)+"?"+
+   new URLSearchParams({apiKey:"freekey",limit:"20",showZeroValues:"false"}).toString();
+ try{
+  const raw=await networkRequest("",url,6500);
+  if(!Array.isArray(raw))return null;
+  const native=[];
+  for(const x of raw.slice(0,20)){
+   if(!ADDRESS.test(x?.from||"")||!ADDRESS.test(x?.to||"")||!/^0x[a-fA-F0-9]{64}$/.test(x?.hash||""))continue;
+   if(x.success!==true&&x.success!==1&&x.success!=="true")continue;
+   // rawValue is expressed in wei; do not guess if only a floating-point
+   // display value is available.
+   const value=String(x.rawValue??"");
+   if(!/^\d+$/.test(value)||BigInt(value)===0n)continue;
+   const seconds=Number(x.timestamp);
+   if(!Number.isSafeInteger(seconds)||seconds<=0)continue;
+   native.push({hash:x.hash,from:{hash:x.from},to:{hash:x.to},value,status:"ok",
+     timestamp:new Date(seconds*1000).toISOString(),block:null});
+  }
+  return {edges:extractEvidence(address,native,null,network,direction),
+    status:{native:"ok",token:"unavailable"},providers:{native:"ethplorer",token:"unavailable"},
+    warnings:["Ethplorer public freekey is development-only, limited to recent indexed transactions. Token and block-height evidence are not provided by this fallback."],
+    source:"Ethplorer Ethereum development fallback (limited recent native transfers)",
+    source_url:"https://ethplorer.io/address/"+address};
+ }catch(_){return null;}
+}
+
 async function tracePage(address,network,direction){
  const base=network.explorer+"/api/v2/addresses/"+encodeURIComponent(address);
  const filter=direction==="in"?"?filter=to":direction==="out"?"?filter=from":"";
@@ -588,6 +619,8 @@ async function tracePage(address,network,direction){
  if(native===null&&tokens===null){
    const alternative=await routescanTracePage(address,network,direction);
    if(alternative)return alternative;
+   const experimental=await ethplorerTracePage(address,network,direction);
+   if(experimental)return experimental;
  }
  return {edges:extractEvidence(address,native,tokens,network,direction),
    status:{native:native===null?"unavailable":"ok",token:tokens===null?"unavailable":"ok"},
@@ -739,7 +772,7 @@ async function investigateFlows(address,options) {
  const rootPeers=edges.map(e=>e.from.toLowerCase()===address.toLowerCase()?e.to:e.from);
  const peerCount=new Map();
  for(const peer of rootPeers)if(peer.toLowerCase()!==address.toLowerCase())peerCount.set(peer.toLowerCase(),(peerCount.get(peer.toLowerCase())||0)+1);
- const candidates=[...peerCount].sort((a,b)=>b[1]-a[1]).slice(0,root.source.startsWith("Routescan")?1:TRACE_LIMITS.max_peers).map(([a])=>a);
+ const candidates=[...peerCount].sort((a,b)=>b[1]-a[1]).slice(0,root.source==="Blockscout API v2"?TRACE_LIMITS.max_peers:1).map(([a])=>a);
  const expanded=[];
  if(depth===2&&candidates.length) {
   const results=await Promise.allSettled(candidates.map(peer=>tracePage(peer,chain,direction)));
@@ -760,7 +793,7 @@ async function investigateFlows(address,options) {
  }
  // Enrich just the subject and first-hop peers; avoid uncontrolled OSINT API fanout.
  const primary=[address.toLowerCase(),...candidates].filter((v,i,a)=>a.indexOf(v)===i);
- if(!root.source.startsWith("Routescan"))await Promise.allSettled(primary.slice(0,2).map(id=>traceEnrich(nodes.get(id),chain)));
+ if(root.source==="Blockscout API v2")await Promise.allSettled(primary.slice(0,2).map(id=>traceEnrich(nodes.get(id),chain)));
  const finalNodes=[...nodes.values()];
  const investigator_leads=buildActionableLeads(address,finalNodes,edges,chain);
  const sources=[{name:"Blockscout public indexed transfers",url:chain.explorer+"/address/"+address,
@@ -1045,7 +1078,7 @@ export default {
     }
     return response;
   };
-  if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","Routescan (secondary index)","PublicNode","dRPC","eth-labels"]});
+  if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","Routescan (secondary index)","Ethplorer (Ethereum development-only native fallback)","PublicNode","dRPC","eth-labels"]});
   if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search","/research-labels","/incident"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/name-search")return send(await discoverPublicEnsNames(u.searchParams.get("q")));
