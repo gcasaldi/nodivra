@@ -617,63 +617,135 @@
   }
 
 
+
+  let triageReport=null;
+  function downloadTriage(kind){
+    if(!triageReport)return;
+    const ref=$("incident-ref").value.trim().slice(0,100);
+    const loss=$("incident-loss").value.trim().slice(0,100);
+    const note=$("incident-notes").value.trim().slice(0,1200);
+    const full={...triageReport,user_notes:{case_reference:ref||null,reported_loss_unverified:loss||null,
+      notes_unverified:note||null},warning:"User-supplied context is not on-chain evidence."};
+    const textLines=["NODIVRA · CRYPTO INCIDENT INITIAL TRIAGE · GJ917",
+      "Blockchain: "+full.network,"Transaction: "+full.incident.tx_hash,"Source: "+full.incident.tx_url,
+      "Execution: "+full.incident.status,"Time: "+(full.incident.timestamp||"unknown"),
+      "Case reference: "+(ref||"—"),"Reported loss (unverified): "+(loss||"—"),"",
+      "OBSERVED FACTS",full.finding.summary,"",
+      "ORIGINAL TRANSFERS",...full.initial_events.map(t=>t.asset+" "+t.amount+" / "+t.from+" > "+t.to+" / "+t.source_url),
+      "LATER SAME-ASSET EVENTS",...(!full.later_observed_events.length?["None verified in this sample."]:full.later_observed_events.map(t=>
+         t.asset+" "+t.amount+" / "+t.from+" > "+t.to+" / "+t.source_url)),
+      "FIRST NEXT ACTION",full.first_next_action.title+": "+full.first_next_action.reason,
+      "COVERAGE GAPS",...full.coverage.issues.map(x=>"- "+x),
+      "LIMITATIONS",...full.limitations.map(x=>"- "+x),
+      "Investigator notes (unverified): "+(note||"—")];
+    const textMode=kind==="txt";
+    const blob=new Blob([textMode?textLines.join("\n"):JSON.stringify(full,null,2)],
+      {type:textMode?"text/plain;charset=utf-8":"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="nodivra-incident-"+full.incident.tx_hash.slice(0,12)+"."+(textMode?"txt":"json");
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }
+  function renderInitialIncident(report,parent){
+    triageReport=report;
+    const summary=element("section","incident-verdict");
+    summary.appendChild(element("div","tiny-label","INCIDENT TRIAGE · PUBLIC ON-CHAIN DATA"));
+    summary.appendChild(element("h3","","What can we establish?"));
+    summary.appendChild(element("p","",report.finding.summary));
+    parent.appendChild(summary);
+    const stats=element("div","incident-metrics");
+    for(const [caption,value] of [["Execution",report.incident.status],
+      ["Original transfers",report.finding.initial_transfers],
+      ["Later transfers",report.finding.later_observations],["Coverage notes",report.coverage.issues.length]]){
+      const cell=element("div","incident-metric");
+      cell.appendChild(element("span","",caption));cell.appendChild(element("strong","",value));stats.appendChild(cell);
+    }
+    parent.appendChild(stats);
+    const action=element("section","incident-next");
+    action.appendChild(element("div","tiny-label","FIRST INVESTIGATIVE NEXT STEP"));
+    action.appendChild(element("h3","",report.first_next_action.title));
+    action.appendChild(element("p","",report.first_next_action.reason));
+    parent.appendChild(action);
+    const evidence=element("details","case-details");
+    evidence.appendChild(element("summary","","View original evidence & possible leads ↗"));
+    const body=element("div","incident-evidence");
+    body.appendChild(link(report.incident.tx_url,"Check original transaction ↗"));
+    for(const [heading,items] of [["Original confirmed transfers",report.initial_events],["Later same-asset observations",report.later_observed_events]]){
+      const group=element("div","incident-evidence-group");
+      group.appendChild(element("h4","",heading+" · "+items.length));
+      for(const x of items.slice(0,10)){
+        const row=element("div","incident-evidence-row");
+        row.appendChild(element("strong","",x.amount+" "+x.asset));
+        row.appendChild(element("span","",trimHash(x.from)+" → "+trimHash(x.to)));
+        if(x.source_url?.startsWith("https://"))row.appendChild(link(x.source_url,"Verify ↗"));
+        group.appendChild(row);
+      }
+      body.appendChild(group);
+    }
+    for(const label of report.public_label_leads||[]){
+      const row=element("div","incident-evidence-row");
+      row.appendChild(element("strong","","Public label, unverified: "+label.label));
+      if(label.source?.startsWith("https://"))row.appendChild(link(label.source,"Label source ↗"));
+      body.appendChild(row);
+    }
+    evidence.appendChild(body);parent.appendChild(evidence);
+    const uncertainties=element("details","case-details");
+    uncertainties.appendChild(element("summary","","What the evidence does NOT establish ↗"));
+    const gap=element("div","incident-evidence");
+    for(const value of [...report.coverage.issues,...report.limitations])gap.appendChild(element("p","minor","• "+value));
+    uncertainties.appendChild(gap);parent.appendChild(uncertainties);
+    const exportBox=element("details","case-details");
+    exportBox.appendChild(element("summary","","Export a short incident dossier ↗"));
+    const frm=element("div","case-fields");
+    for(const [id,title,placeholder] of [["incident-ref","Case reference (optional)","Incident ID"],
+      ["incident-loss","Reported loss (unverified, optional)","e.g. 2 ETH"]]){
+      const label=element("label","",title),item=document.createElement("input");
+      item.id=id;item.type="text";item.maxLength=100;item.placeholder=placeholder;
+      label.appendChild(item);frm.appendChild(label);
+    }
+    const label=element("label","","Investigator notes (optional; browser only)");
+    const field=document.createElement("textarea");field.id="incident-notes";field.rows=2;field.maxLength=1200;
+    label.appendChild(field);frm.appendChild(label);
+    const buttons=element("div","incident-actions");
+    for(const [type,caption] of [["txt","Text brief ↗"],["json","Evidence JSON ↗"]]){
+      const btn=element("button","button secondary",caption);btn.type="button";
+      btn.addEventListener("click",()=>downloadTriage(type));buttons.appendChild(btn);
+    }
+    frm.appendChild(buttons);exportBox.appendChild(frm);parent.appendChild(exportBox);
+    parent.appendChild(element("p","lead-disclaimer","A later transaction is a lead, not proof that the same stolen assets moved. This is not a certified forensic report."));
+  }
   async function investigateTransaction(raw,network="ethereum"){
     const hash=String(raw||"").trim();
     if(!/^0x[a-fA-F0-9]{64}$/.test(hash))return false;
     if(activeRequest)activeRequest.abort();
     const controller=new AbortController();activeRequest=controller;
-    activeAddress="";evidenceSnapshot=null;flowEvidence=null;
-    const box=$("transaction-result"),networkBox=$("chain-results");
-    results.hidden=true;networkBox.hidden=true;box.hidden=false;box.replaceChildren();
-    input.value=hash;button.disabled=true;button.textContent="Searching…";
-    setStatus("Looking up transaction evidence on "+network+"…");
-    const header=element("div","tx-head");
-    header.appendChild(element("strong","","Transaction evidence"));
-    const select=element("select","tx-network-select");
-    select.setAttribute("aria-label","Blockchain network for transaction hash");
-    const chains=[["ethereum","Ethereum"],["base","Base"],["arbitrum","Arbitrum"],["optimism","Optimism"],["polygon","Polygon"]];
-    for(const [id,name] of chains){
-      const option=element("option","",name);option.value=id;option.selected=id===network;select.appendChild(option);
+    activeAddress="";evidenceSnapshot=null;flowEvidence=null;triageReport=null;
+    const box=$("transaction-result");
+    results.hidden=true;$("chain-results").hidden=true;$("research-results").hidden=true;
+    box.hidden=false;box.replaceChildren();
+    input.value=hash;button.disabled=true;button.textContent="Investigating…";
+    setStatus("Checking the original transaction and sampled onward movements…");
+    const heading=element("div","tx-head");
+    heading.appendChild(element("strong","","INITIAL CRYPTO INCIDENT TRIAGE"));
+    const dropdown=element("select","tx-network-select");
+    dropdown.setAttribute("aria-label","Select EVM blockchain");
+    for(const [id,label] of [["ethereum","Ethereum"],["base","Base"],["arbitrum","Arbitrum"],["optimism","Optimism"],["polygon","Polygon"]]){
+      const option=element("option","",label);option.value=id;option.selected=id===network;dropdown.appendChild(option);
     }
-    select.addEventListener("change",()=>investigateTransaction(hash,select.value));
-    header.appendChild(select);box.appendChild(header);
-    try {
-      const data=await fetchJson(API+"/transaction?"+new URLSearchParams({hash,network}).toString(),controller.signal,15000);
+    dropdown.addEventListener("change",()=>investigateTransaction(hash,dropdown.value));
+    heading.appendChild(dropdown);box.appendChild(heading);
+    try{
+      const r=await fetchJson(API+"/incident?"+new URLSearchParams({hash,network}).toString(),controller.signal,35000);
       if(activeRequest!==controller)return true;
-      const verified=element("div","tx-evidence");
-      verified.appendChild(element("div","tiny-label","PUBLIC BLOCKCHAIN RECORD · "+data.network.toUpperCase()));
-      verified.appendChild(element("p","tx-hash",data.hash));
-      const meta=element("div","tx-facts");
-      for(const [label,value] of [["Native transfer",data.native_value===null?"Unknown":data.native_value+" "+data.native_symbol],["Execution",data.execution],["Timestamp",data.timestamp||"Unavailable"],["Block",data.block??"Unavailable"]]){
-        const row=element("div","");
-        row.appendChild(element("span","",label));row.appendChild(element("strong","",value));meta.appendChild(row);
-      }
-      verified.appendChild(meta);
-      for(const [kind,party] of [["Sender",data.from],["Recipient",data.to]]){
-        if(!party)continue;
-        const line=element("div","tx-counterparty");
-        const info=element("div","");
-        info.appendChild(element("span","",kind));
-        info.appendChild(element("strong","",party.public_tag||trimHash(party.address)));
-        if(party.public_tag)info.appendChild(element("span","",party.address+" · public tag, not verified owner"));
-        line.appendChild(info);
-        const act=element("button","trace-button","Investigate →");
-        act.type="button";act.addEventListener("click",()=>lookup(party.address));
-        line.appendChild(act);verified.appendChild(line);
-      }
-      const citation=link(data.source_url,"Check source transaction ↗");
-      verified.appendChild(citation);
-      verified.appendChild(element("p","minor","A transaction proves an observed on-chain event, not the legal identity of a sender or recipient."));
-      box.appendChild(verified);
-      setStatus("Transaction record found. Follow the sender or recipient to investigate related public transfers.");
-    }catch(err){
+      renderInitialIncident(r,box);
+      setStatus("Initial incident assessment ready. Review the evidence and the next recommended check.");
+    }catch(e){
       if(activeRequest!==controller)return true;
-      box.appendChild(element("p","case-attention","No verified result on "+network+": "+err.message+". Choose another network or verify the hash with its original explorer."));
-      setStatus("This transaction could not be verified on the selected network.",true);
+      box.appendChild(element("p","case-attention","Incident evidence unavailable: "+e.message+". Check the selected blockchain and original transaction explorer."));
+      setStatus("No verified incident result. An unavailable provider is not evidence of missing activity.",true);
     }finally{if(activeRequest===controller){button.disabled=false;button.textContent="Search →";}}
     return true;
   }
-
 
   function isPublicNameQuery(value) {
     const raw=String(value||"").trim();

@@ -18,7 +18,7 @@ The output should answer three questions:
 2. **What's the first actionable lead?** For example, a publicly tagged exchange address *with a linked transaction* — not an invented owner or an unsupported allegation.
 3. **What can I prove, what is only plausible, and where did the trail stop?** Explain missing records, swaps, bridges, provider outages and alternative interpretations. Export a compact, independently checkable case report.
 
-This is the **Evidence-to-Action / Claim Checker** idea. It is a product hypothesis, **not a feature I've finished**. I won't claim it is unprecedented: professional tools already automate much of this. Our possible differentiation is a compact, transparent, openly auditable workflow that makes evidence gaps and the next lawful investigative step explicit.
+This is the **Evidence-to-Action / Claim Checker** idea. The first **Incident Triage beta** is implemented, but the product hypothesis is **not validated against real incident cases**. I won't claim it is unprecedented: professional tools already automate much of this. Our possible differentiation is a compact, transparent, openly auditable workflow that makes evidence gaps and the next lawful investigative step explicit.
 
 ### What would convince me to use NODIVRA
 
@@ -32,6 +32,9 @@ This is the **Evidence-to-Action / Claim Checker** idea. It is a product hypothe
 **Stop rule:** no more dataset integrations, decorative dashboards or generic features until a real case passes this test. Public beta capabilities below are building blocks, not a finished investigative product.
 
 ## What I've built
+
+- [x] Implement initial EVM incident triage from a transaction hash, with successful execution checks, ERC-20 and native event extraction, and bounded later same-asset observations.
+- [x] Surface the first practical verification step, evidence gaps and optional client-side case notes with text/JSON export.
 
 - [x] Search public activity on Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana.
 - [x] Add on-demand historical FuseChain research lookup for Ethereum addresses with explicit label and source limitations.
