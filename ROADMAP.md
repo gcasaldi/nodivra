@@ -4,6 +4,33 @@ I want NODIVRA to be a practical intelligence tool, not just another wallet expl
 
 The question I want it to answer is simple: **what can I actually find out about this wallet, and what evidence supports it?**
 
+## The one problem I want to solve
+
+I don't need another blockchain explorer. Arkham, GraphSense, Breadcrumbs and Chainalysis already trace wallets, show graphs and identify public services. I won't call those features unique.
+
+**My goal: turn a reported crypto loss into the first evidence-backed action an investigator can take.**
+
+The input should be as small as possible: **a transaction hash or an address, an approximate amount, and a date**.
+
+The output should answer three questions:
+
+1. **Where can I actually trace the reported funds?** Show time-ordered, chain-specific, sourced transfers; distinguish direct transfers from uncertain fund-flow heuristics.
+2. **What's the first actionable lead?** For example, a publicly tagged exchange address *with a linked transaction* — not an invented owner or an unsupported allegation.
+3. **What can I prove, what is only plausible, and where did the trail stop?** Explain missing records, swaps, bridges, provider outages and alternative interpretations. Export a compact, independently checkable case report.
+
+This is the **Evidence-to-Action / Claim Checker** idea. It is a product hypothesis, **not a feature I've finished**. I won't claim it is unprecedented: professional tools already automate much of this. Our possible differentiation is a compact, transparent, openly auditable workflow that makes evidence gaps and the next lawful investigative step explicit.
+
+### What would convince me to use NODIVRA
+
+- [ ] Run at least **five public, independently documented crypto-theft cases** end to end, keeping exact transaction hashes and ground truth in a reproducible benchmark.
+- [ ] For each case, either produce **at least one traceable, source-backed investigative lead** or explicitly conclude **no verified lead** without inventing a path.
+- [ ] Check chronology, chain, token type, amount, transaction success, provider coverage and competing interpretations. Do not treat two connected addresses as proof that the same coins moved.
+- [ ] Include the first clearly sourced service touchpoint when one exists, or show exactly why it cannot be established.
+- [ ] Generate a **one-page readable finding** and machine-readable evidence bundle with original hashes, source timestamps, data versions and limitations.
+- [ ] Compare against a **manual explorer workflow and a competing public tool**; measure time saved, accuracy, false positives and unverified labels. If we cannot demonstrate a meaningful advantage, narrow the project instead of adding more datasets.
+
+**Stop rule:** no more dataset integrations, decorative dashboards or generic features until a real case passes this test. Public beta capabilities below are building blocks, not a finished investigative product.
+
 ## What I've built
 
 - [x] Search public activity on Ethereum, Base, Arbitrum, Optimism, Polygon, Bitcoin and Solana.
