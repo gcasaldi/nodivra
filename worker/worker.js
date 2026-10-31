@@ -849,10 +849,10 @@ function incidentSeeds(tx,tokenRows,chain){
 function incidentLater(tx,item){
  const a=Number(tx.block??tx.block_number),b=Number(item.block);
  if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<=0||b<=a)return false;
- if(tx.timestamp&&item.timestamp){
-  const t0=Date.parse(tx.timestamp),t1=Date.parse(item.timestamp);
-  if(!Number.isFinite(t0)||!Number.isFinite(t1)||t1<t0||t1-t0>30*86400000)return false;
- }
+ // A missing or invalid time means we cannot establish the 30-day follow-up window.
+ if(!tx.timestamp||!item.timestamp)return false;
+ const t0=Date.parse(tx.timestamp),t1=Date.parse(item.timestamp);
+ if(!Number.isFinite(t0)||!Number.isFinite(t1)||t1<t0||t1-t0>30*86400000)return false;
  return true;
 }
 function incidentNextMoves(seeds,tx,observed,chain){

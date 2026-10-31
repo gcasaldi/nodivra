@@ -220,3 +220,32 @@ test('incident missing on-chain source fails, not a fabricated no-activity findi
  assert.equal(r.status,502);
  assert.match(r.json.error,/429/);
 });
+
+test('incident follow-up rejects pre-incident transfers and other ERC-20 contracts',async()=>{
+ const tokenA='0x4444444444444444444444444444444444444444';
+ const tokenB='0x5555555555555555555555555555555555555555';
+ const event=(address,contract,block,index)=>({
+   from:{hash:parent},to:{hash:address},transaction_hash:hash('e'),
+   token_type:'ERC-20',token:{address_hash:contract,type:'ERC-20',decimals:'6',symbol:'USDC'},
+   total:{value:'2000000'},block_number:block,log_index:index,timestamp:'2026-10-28T10:00:00Z'
+ });
+ fakeFetch(url=>{
+   const s=String(url);
+   if(s.includes('/transactions/'+hash('c')+'/token-transfers'))return {data:{
+     items:[{...event(parent,tokenA,100,0),from:{hash:root},transaction_hash:hash('c'),
+       timestamp:'2026-10-29T09:00:00Z'}]}};
+   if(s.includes('/transactions/'+hash('c')))return {data:{
+     hash:hash('c'),status:'ok',from:{hash:root},to:{hash:tokenA},value:'0',
+     timestamp:'2026-10-29T09:00:00Z',block:100}};
+   if(s.includes('/addresses/'+parent+'/transactions'))return {data:{items:[]}};
+   if(s.includes('/addresses/'+parent+'/token-transfers'))return {data:{
+     items:[event(grandparent,tokenA,99,1),{...event(grandparent,tokenB,103,2),
+       timestamp:'2026-10-29T12:00:00Z'}]}};
+   throw Error('Unexpected '+s);
+ });
+ const r=await request('/incident?hash='+hash('c'));
+ assert.equal(r.status,200);
+ assert.equal(r.json.initial_events.length,1);
+ assert.equal(r.json.later_observed_events.length,0);
+ assert.equal(r.json.first_next_action.basis,'incomplete_recent_sample');
+});
