@@ -171,3 +171,52 @@ test('historical research provider rate-limits return unavailable, never zero or
  assert.equal(result.json.status,'unavailable');
  assert.equal(result.json.issue,'rate_limited');
 });
+
+test('incident triage follows confirmed ERC-20 transfer with same contract and later block',async()=>{
+ const contract='0x4444444444444444444444444444444444444444';
+ fakeFetch(url=>{
+  const s=String(url);
+  if(s.includes('/transactions/'+hash('c')+'/token-transfers'))return {data:{items:[{
+   transaction_hash:hash('c'),token_type:'ERC-20',from:{hash:root},to:{hash:parent},
+   token:{address_hash:contract,symbol:'USDC',decimals:'6'},total:{value:'2500000'},log_index:1
+  }],next_page_params:null}};
+  if(s.includes('/transactions/'+hash('c')))return {data:{hash:hash('c'),status:'ok',from:{hash:root},to:{hash:contract},
+   value:'0',block:100,timestamp:'2026-10-29T09:00:00Z'}};
+  if(s.includes('/addresses/'+parent+'/transactions'))return {data:{items:[{
+    hash:hash('d'),status:'ok',from:{hash:parent},to:{hash:grandparent},
+    value:'1000000000000000000',block:102,timestamp:'2026-10-29T10:00:00Z'
+  }]}};
+  if(s.includes('/addresses/'+parent+'/token-transfers'))return {data:{items:[{
+    transaction_hash:hash('e'),token_type:'ERC-20',from:{hash:parent},to:{hash:grandparent},
+    token:{address_hash:contract,symbol:'USDC',decimals:'6'},total:{value:'1500000'},
+    block_number:103,timestamp:'2026-10-29T11:00:00Z',log_index:3
+  }]}};
+  throw Error('Unexpected '+s);
+ });
+ const r=await request('/incident?hash='+hash('c')+'&network=ethereum');
+ assert.equal(r.status,200);
+ assert.equal(r.json.initial_events.length,1);
+ assert.equal(r.json.initial_events[0].asset,'USDC');
+ assert.equal(r.json.later_observed_events.length,1);
+ assert.equal(r.json.later_observed_events[0].tx_hash,hash('e'));
+ assert.match(r.json.later_observed_events[0].evidence_type,/not_proven/);
+});
+test('failed incident execution never creates transfer leads',async()=>{
+ fakeFetch(url=>{
+   if(String(url).includes('/transactions/'+hash('c')))return {data:{
+    hash:hash('c'),from:{hash:root},to:{hash:parent},value:'1230000000000000000',
+    status:'failed',block:100,timestamp:'2026-10-29T09:00:00Z'}};
+   throw Error('Followup should not be requested');
+ });
+ const r=await request('/incident?hash='+hash('c'));
+ assert.equal(r.status,200);
+ assert.equal(r.json.finding.state,'failed');
+ assert.equal(r.json.initial_events.length,0);
+ assert.equal(r.json.later_observed_events.length,0);
+});
+test('incident missing on-chain source fails, not a fabricated no-activity finding',async()=>{
+ fakeFetch(()=>({status:429,data:{error:'rate limit'}}));
+ const r=await request('/incident?hash='+hash('c'));
+ assert.equal(r.status,502);
+ assert.match(r.json.error,/429/);
+});

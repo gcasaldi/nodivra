@@ -826,6 +826,116 @@ async function historicalResearch(address) {
  }finally{clearTimeout(timer);}
 }
 
+
+const INCIDENT_HASH=/^0x[a-fA-F0-9]{64}$/;
+// Narrow, evidence-first incident triage: reported funds are NOT automatically traced by adjacent wallet activity.
+function incidentSeeds(tx,tokenRows,chain){
+ const rows=[],from=tx.from?.hash,to=tx.to?.hash,val=traceValue(tx.value,18);
+ if(ADDRESS.test(from||"")&&ADDRESS.test(to||"")&&from.toLowerCase()!==to.toLowerCase()&&val&&BigInt(val.base_units)>0n)
+  rows.push({kind:"native",from,to,asset:chain.symbol,asset_contract:null,amount:val.display,
+   tx_hash:tx.hash,source_url:chain.explorer+"/tx/"+tx.hash,base_units:val.base_units});
+ for(const t of (tokenRows||[]).slice(0,80)){
+  if(t?.token_type!=="ERC-20"&&t?.token?.type!=="ERC-20")continue;
+  if(t.transaction_hash?.toLowerCase()!==tx.hash.toLowerCase())continue;
+  const a=t.from?.hash,b=t.to?.hash,contract=t.token?.address_hash||t.token?.address;
+  const value=traceValue(t.total?.value??t.value,t.token?.decimals??t.total?.decimals);
+  if(!ADDRESS.test(a||"")||!ADDRESS.test(b||"")||!ADDRESS.test(contract||"")||!value||BigInt(value.base_units)===0n)continue;
+  rows.push({kind:"token",from:a,to:b,asset:String(t.token?.symbol||"ERC-20").slice(0,24),
+   asset_contract:contract,amount:value.display,tx_hash:tx.hash,base_units:value.base_units,
+   event_index:t.log_index??null,source_url:chain.explorer+"/tx/"+tx.hash});
+ }
+ return rows.slice(0,10);
+}
+function incidentLater(tx,item){
+ const a=Number(tx.block??tx.block_number),b=Number(item.block);
+ if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<=0||b<=a)return false;
+ if(tx.timestamp&&item.timestamp){
+  const t0=Date.parse(tx.timestamp),t1=Date.parse(item.timestamp);
+  if(!Number.isFinite(t0)||!Number.isFinite(t1)||t1<t0||t1-t0>30*86400000)return false;
+ }
+ return true;
+}
+function incidentNextMoves(seeds,tx,observed,chain){
+ const rows=[],seen=new Set();
+ for(const seed of seeds){
+  for(const item of observed.get(seed.to.toLowerCase())?.edges||[]){
+   if(item.from.toLowerCase()!==seed.to.toLowerCase()||item.kind!==seed.kind||!incidentLater(tx,item))continue;
+   if(seed.kind==="token"&&(seed.asset_contract?.toLowerCase()!==item.asset_contract?.toLowerCase()))continue;
+   const key=[item.tx_hash,item.from.toLowerCase(),item.to.toLowerCase(),item.kind,item.asset_contract||"",item.event_index??""].join("|");
+   if(seen.has(key))continue;seen.add(key);
+   rows.push({kind:item.kind,from:item.from,to:item.to,asset:item.asset,asset_contract:item.asset_contract,
+    amount:item.amount,tx_hash:item.tx_hash,block:item.block,timestamp:item.timestamp,source_url:item.source_url,
+    recipient_public_label:item.to_name||null,
+    public_label_source:item.to_name?chain.explorer+"/address/"+item.to:null,
+    evidence_type:"observed_later_same_asset_transfer_not_proven_continuation"});
+  }
+ }
+ return rows.sort((a,b)=>Number(a.block)-Number(b.block)).slice(0,10);
+}
+async function triageIncident(hash,networkId){
+ if(!INCIDENT_HASH.test(hash))failure("Enter an EVM transaction hash (0x followed by 64 hexadecimal digits).",400);
+ const chain=NETWORKS.find(n=>n.id===networkId);
+ if(!chain)failure("Unsupported EVM network.",400);
+ const root=chain.explorer+"/api/v2",tx=await networkRequest(root,"/transactions/"+hash,10000);
+ if(tx?.missing)failure("Transaction not indexed on this network; check the hash and blockchain.",404);
+ if(!tx||tx.hash?.toLowerCase()!==hash.toLowerCase())failure("Transaction cannot be verified from public index.",502);
+ const failed=tx.status==="error"||tx.status==="failed",successful=["ok","success"].includes(tx.status);
+ const issue=[],providers={transaction:"ok",erc20:"not_checked",recipient_history:"not_checked"};
+ let tokens=null;
+ if(successful){
+  try{
+   const p=await networkRequest(root,"/transactions/"+hash+"/token-transfers",8000);
+   if(Array.isArray(p?.items)){tokens=p.items;providers.erc20="ok";if(p.next_page_params)issue.push("ERC-20 event index is paginated; only first page was checked.");}
+   else{providers.erc20="unavailable";issue.push("ERC-20 events unavailable, so contract/token movements may be missing.");}
+  }catch(e){providers.erc20="unavailable";issue.push("ERC-20 events unavailable: "+String(e.message).slice(0,80));}
+ }
+ const seeds=successful?incidentSeeds(tx,tokens,chain):[],history=new Map();
+ if(seeds.length){
+  const recipients=[...new Set(seeds.map(t=>t.to.toLowerCase()))].slice(0,2);
+  for(const address of recipients){
+   try{
+    const page=await tracePage(address,chain,"out");
+    history.set(address,page);
+    if(page.status.native!=="ok"||page.status.token!=="ok")issue.push("Recipient history is partially unavailable for "+address+".");
+   }catch(e){issue.push("Recipient history unavailable for "+address+".");}
+  }
+  providers.recipient_history=history.size?"sampled":"unavailable";
+ }
+ const later=incidentNextMoves(seeds,tx,history,chain);
+ const tagMap=new Map();
+ for(const x of later)if(x.recipient_public_label&&!tagMap.has(x.to.toLowerCase()))
+   tagMap.set(x.to.toLowerCase(),{address:x.to,label:x.recipient_public_label,source:x.public_label_source,
+     supporting_tx:x.tx_hash,tx_url:x.source_url,certainty:"unverified explorer name tag"});
+ const labels=[...tagMap.values()];
+ const observation=failed?"Execution failed. This transaction is not evidence of a completed transfer.":
+   !successful?"Successful execution is not confirmed by this indexer. No completed transfer is claimed.":
+   seeds.length?seeds.length+" transfer(s) observed in the original transaction; "+later.length+
+     " later same-asset outward transfer(s) found from first recipients in bounded index samples.":
+   "Execution succeeded, but no external native/ERC-20 transfer was established in the returned index. Internal transfers or contract calls may require other evidence.";
+ const next=!successful?{title:"Verify execution and select the correct transaction",reason:"Review the source explorer, contract logs or a separate withdrawal transaction.",basis:"execution_status"}:
+   labels.length?{title:"Verify the publicly tagged destination",reason:"Cross-check this label against the linked transaction and independent sources. If it is a regulated service, the next step may require lawful preservation or disclosure processes.",basis:"public_tag_plus_tx"}:
+   later.length?{title:"Examine the first observed next recipient",reason:"Open the linked transaction and review the next address. A later transfer of the same asset is NOT proof that the reported funds were forwarded.",basis:"confirmed_later_event"}:
+   seeds.length?{title:"Inspect the full recipient history",reason:"No qualifying later transfer appeared in the recent sample. Check historical pages, swaps and internal calls before drawing conclusions.",basis:"incomplete_recent_sample"}:
+   {title:"Check token and internal events",reason:"There was no directly indexed transfer in this sample. Verify contract execution, logs and internal transaction paths.",basis:"unresolved_transfer"};
+ if(seeds.length)issue.push("At most two recipient addresses and one recent outgoing page per address were sampled; older history can be missed.");
+ if(later.length)issue.push("Chronology and same-asset matching do not prove the identical reported funds were forwarded.");
+ if(!successful)issue.push("No onward tracing without confirmed successful execution.");
+ return {schema:"nodivra.incident.v1",generated_at:new Date().toISOString(),network:chain.name,network_id:chain.id,
+  incident:{tx_hash:hash,tx_url:chain.explorer+"/tx/"+hash,status:tx.status||"unknown",
+   sender:ADDRESS.test(tx.from?.hash||"")?tx.from.hash:null,
+   recipient:ADDRESS.test(tx.to?.hash||"")?tx.to.hash:null,
+   block:tx.block??tx.block_number??null,timestamp:tx.timestamp||null,method:tx.method||null},
+  finding:{state:failed?"failed":!successful?"not_confirmed":!seeds.length?"no_direct_transfer":"observed_transfer",
+   summary:observation,initial_transfers:seeds.length,later_observations:later.length},
+  initial_events:seeds,later_observed_events:later,public_label_leads:labels,first_next_action:next,
+  coverage:{providers,partial:issue.length>0,issues:issue,
+   sampling:"One recent API page per recipient (max two recipients), same network/asset, later block, max 30 days.",
+   source:"Blockscout public API v2"},
+  limitations:["This is first-response triage, not proof of stolen asset continuity or of who owns a wallet.",
+   "Swaps, internal calls, bridge activity, mixers and paginated older transactions may not be represented.",
+   "No person identification, criminality inference, fund recovery promise or legal chain-of-custody certification."]};
+}
+
 export default {
  async fetch(request,env,context) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:headers(request)});
@@ -849,11 +959,12 @@ export default {
     return response;
   };
   if(path==="/health")return reply(request,{ok:true,service:"NODIVRA",providers:["Blockscout","PublicNode","dRPC","eth-labels"]});
-  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search","/research-labels"].includes(path))return reply(request,{error:"Not found"},404);
+  if(!["/lookup","/origin","/resolve","/multichain","/investigate","/transaction","/name-search","/research-labels","/incident"].includes(path))return reply(request,{error:"Not found"},404);
   try{
    if(path==="/name-search")return send(await discoverPublicEnsNames(u.searchParams.get("q")));
    if(path==="/research-labels"){const address=u.searchParams.get("address")||"";return send(await historicalResearch(address));}
    if(path==="/resolve")return send(await resolveEns(u.searchParams.get("name")));
+   if(path==="/incident")return reply(request,await triageIncident(u.searchParams.get("hash")||"",u.searchParams.get("network")||"ethereum"));
    if(path==="/transaction"){const hash=u.searchParams.get("hash")||"";if(!/^0x[a-fA-F0-9]{64}$/.test(hash))failure("Valid 0x + 64-digit transaction hash required.",400);return reply(request,await inspectTransaction(hash,u.searchParams.get("network")||"ethereum"));}
    if(path==="/investigate") {const address=u.searchParams.get("address")||"";if(!ADDRESS.test(address))failure("Valid EVM address required for transfer tracing.",400);return reply(request,await investigateFlows(address,{network:u.searchParams.get("network"),direction:u.searchParams.get("direction"),depth:u.searchParams.get("depth")}));}
    if(path==="/multichain"){const address=u.searchParams.get("address")||"";if(ADDRESS.test(address))return send(await scanEvm(address));if(BTC.test(address))return send(await scanBitcoin(address));if(SOLANA_ADDRESS.test(address))return send(await scanSolana(address));failure("Enter a valid EVM, Bitcoin or Solana mainnet address.",400);}
