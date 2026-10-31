@@ -94,15 +94,15 @@
     }else if(type==="wallet"){
       scenario="wallet";
       state.investigate="Wallet result";
-      state.correlate="Evidence available";
-      state.connect="Trace available";
+      state.correlate=Array.isArray(data?.transactions)?"Indexed evidence":"Partial sources";
+      state.connect=Array.isArray(data?.transactions)?"Trace available":"Index may be limited";
       state.recommend="Run a trace";
       state.report="Run a trace";
       $("advanced-evidence").hidden=false;
       for(const step of ["investigate","correlate","connect"])setEmpty(step,false);
     }else if(type==="name"){
       scenario="name";
-      state.investigate="Public name leads";
+      state.investigate=data?.results?.length?"ENS candidates":"No ENS candidates";
       state.correlate="ENS only";
       setEmpty("investigate",false);
     }else if(type==="scan"){
@@ -117,8 +117,8 @@
       state.correlate=data?.status==="dataset_match"?"Research label":"Research checked";
       setEmpty("correlate",false);
     }else if(type==="trace"){
-      state.connect="Graph ready";
-      state.recommend="Leads ready";
+      state.connect=data?.stats?.transfers>0?"Observed graph":"No sampled transfers";
+      state.recommend=data?.stats?.transfers>0?"Review leads":"Review limitations";
       state.report="Export ready";
       for(const step of ["connect","recommend","report"])setEmpty(step,false);
     }
