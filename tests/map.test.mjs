@@ -28,7 +28,7 @@ function setup(respond){
   }
   const ids=['wallet-map','map-svg-host','map-inspector','map-related','map-history','map-back',
     'map-expand','map-network','map-status','module-empty-connect','map-counter',
-    'map-home','map-zoom-in','map-zoom-out','map-fit'];
+    'map-home','map-zoom-in','map-zoom-out','map-fit','map-export'];
   const nodes=Object.fromEntries(ids.map(id=>[id,new Node('div',id)]));
   const calls=[];
   const states=[];
@@ -105,4 +105,29 @@ test('new wallet resets the prior investigation evidence and prevents stale cros
   assert.equal(map.snapshot().nodes,2);
   assert.equal(map.snapshot().edges,1);
   assert.equal(map.snapshot().history.length,0);
+});
+
+test('public wallet lookup can supply verified indexed edges when richer tracing is rate-limited',async()=>{
+  const {map,nodes}=setup(async()=>({status:429}));
+  map.start(A);await tick();
+  const actual=map.ingestWalletSample(A,{transactions:[{
+    hash:hash('b'),status:'ok',from:{hash:A},to:{hash:B},value:'1000000000000000000',
+    block:100,timestamp:'2026-10-29T09:00:00Z'
+  },{
+    hash:hash('c'),status:'failed',from:{hash:A},to:{hash:C},value:'5000000000000000000',
+    block:101,timestamp:'2026-10-29T09:30:00Z'
+  }],token_transfers:[]});
+  assert.equal(actual,1);
+  assert.equal(map.snapshot().nodes,2);
+  assert.equal(map.snapshot().edges,1);
+  assert.match(nodes['map-counter'].textContent,/1 transfer events/);
+});
+test('a wallet lookup for an unrelated case cannot contaminate the current map',async()=>{
+  const {map}=setup(async()=>({status:429}));
+  map.start(A);await tick();
+  const injected=map.ingestWalletSample(C,{transactions:[{
+    hash:hash('b'),status:'ok',from:{hash:C},to:{hash:B},value:'1000000000000000000'
+  }]});
+  assert.equal(injected,0);
+  assert.equal(map.snapshot().edges,0);
 });
