@@ -57,11 +57,13 @@ test('incoming graph has two evidenced hops with transaction hashes',async()=>{
  assert.match(result.json.identity_status,/No legal identity inferred/);
  assert.ok(result.json.graph.nodes.some(x=>x.labels.some(l=>l.name==='Labeled service')));
 });
-test('unavailable providers produce an error, never a fabricated empty graph',async()=>{
+test('unavailable providers produce an explicit source outage, never fabricated zero activity',async()=>{
  fakeFetch(()=>{throw Error('Provider offline');});
  const result=await request('/investigate?address='+root);
- assert.equal(result.status,503);
- assert.ok(result.json.error);
+ assert.equal(result.status,200);
+ assert.equal(result.json.coverage.data_status,'unavailable');
+ assert.equal(result.json.graph.edges.length,0);
+ assert.match(result.json.conclusions[0],/Sources unavailable/);
 });
 test('no qualifying transfers is explicitly a sample limitation',async()=>{
  fakeFetch((url)=>{
@@ -288,5 +290,7 @@ test('Routescan error response is not mistaken for a valid empty wallet',async()
  fakeFetch(url=>String(url).includes('blockscout.com')?{status:429,data:{}}:
    {data:{status:'0',message:'NOTOK',result:'Max rate limit reached'}});
  const r=await request('/investigate?address='+root+'&network=ethereum&depth=1');
- assert.equal(r.status,503);
+ assert.equal(r.status,200);
+ assert.equal(r.json.coverage.data_status,'unavailable');
+ assert.match(r.json.conclusions[0],/unavailable/i);
 });

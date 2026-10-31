@@ -38,7 +38,7 @@
     if(indicator){
       indicator.classList.toggle("is-offline",isError);
       indicator.classList.toggle("is-loading",busy&&!isError);
-      indicator.lastChild.textContent=isError?" SOURCE ISSUE":busy?" LOADING":" READY";
+      const label=$("ops-status-label");if(label)label.textContent=isError?"SOURCE ISSUE":busy?"LOADING":"READY";
     }
   }
   function clear(){
